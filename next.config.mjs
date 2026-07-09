@@ -3,7 +3,7 @@ const require = createRequire(import.meta.url)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['viem', 'wagmi', '@privy-io/wagmi'],
+  transpilePackages: ['viem', 'wagmi', '@privy-io/wagmi', 'permissionless'],
   
   typescript: {
     ignoreBuildErrors: true,
