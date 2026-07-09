@@ -5,7 +5,6 @@ import { getEthPriceUsd, usdToWei } from "@/lib/eth-price"
 import { getBotWallets } from "@/lib/bot-wallet"
 import { checkHoodbumpHold } from "@/lib/hold-gate"
 import {
-  ANTI_DETECTION_CONFIG,
   MIN_INTERVAL_SECONDS,
   MAX_INTERVAL_SECONDS,
   MIN_SWAP_USD,
@@ -152,7 +151,6 @@ export async function POST(request: NextRequest) {
         amountWei: amountWei.toString(),
         amountEth: (Number(amountWei) / 1e18).toFixed(6),
         ethPriceUsd,
-        antiDetection: ANTI_DETECTION_CONFIG,
       },
     })
   } catch (error: any) {

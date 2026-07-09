@@ -36,12 +36,6 @@ import {
   getPublicClient,
 } from "../lib/bot-wallet"
 import { getZeroXQuote, buildSwapFromQuote, formatZeroXError, executeEthSwap } from "../lib/swap"
-import { encodeFunctionData } from "viem"
-import {
-  getNextInterval,
-  shouldSkipCycle,
-  getVariableAmount,
-} from "../lib/anti-detection"
 import { getEthPriceUsd, usdToWei } from "../lib/eth-price"
 import { RH_WETH_ADDRESS, WALLETS_PER_USER, MIN_INTERVAL_SECONDS } from "../lib/constants"
 
@@ -82,18 +76,7 @@ async function processUserCycle(state: {
       return { shouldContinue: false }
     }
 
-    // 2. Anti-detection: skip cycle
-    if (shouldSkipCycle()) {
-      console.log(`⏭️ [Skip] ${userAddress} (anti-detection)`)
-      await logBotEvent({
-        user_address: userAddress,
-        session_id: session.id,
-        action: "cycle_skipped",
-        status: "info",
-        message: "[Anti-detection] Cycle skipped to simulate human behavior",
-      })
-      return { shouldContinue: true }
-    }
+    // 2. (skip-cycle removed — anti-detection disabled per user request)
 
     // 3. Get bot wallets
     const botWallets = await getBotWallets(userAddress)
@@ -103,10 +86,9 @@ async function processUserCycle(state: {
       return { shouldContinue: false }
     }
 
-    // 4. Calculate amount with anti-detection variance
+    // 4. Calculate amount (fixed — no anti-detection variance)
     const ethPriceUsd = await getEthPriceUsd()
-    const baseAmountWei = usdToWei(parseFloat(session.amount_usd), ethPriceUsd)
-    const amountWei = getVariableAmount(baseAmountWei)
+    const amountWei = usdToWei(parseFloat(session.amount_usd), ethPriceUsd)
     console.log(`   Amount: ${(Number(amountWei) / 1e18).toFixed(6)} ETH ($${session.amount_usd})`)
 
     // 5. Pick wallet via TRUE round-robin across all funded wallets
@@ -247,8 +229,7 @@ function scheduleNextSwap(userAddress: string) {
   if (state.timeoutId) clearTimeout(state.timeoutId)
 
   const baseIntervalMs = state.session.interval_seconds * 1000
-  const actualInterval = getNextInterval(baseIntervalMs)
-  console.log(`⏰ [${userAddress}] Next swap in ${(actualInterval / 1000).toFixed(0)}s`)
+  console.log(`⏰ [${userAddress}] Next swap in ${(baseIntervalMs / 1000).toFixed(0)}s (fixed)`)
 
   state.timeoutId = setTimeout(async () => {
     const result = await processUserCycle(state)
@@ -258,7 +239,7 @@ function scheduleNextSwap(userAddress: string) {
       // Cleanup
       activeUsers.delete(userAddress)
     }
-  }, actualInterval)
+  }, baseIntervalMs)
 }
 
 // ============================================
@@ -328,7 +309,6 @@ async function startWorker() {
   console.log(`⏱️  Polling interval: ${POLLING_INTERVAL_MS / 1000}s`)
   console.log(`🔗 Chain: Robinhood (${process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL?.slice(0, 40)}...)`)
   console.log(`💰 Swap provider: 0x (1% affiliate fee)`)
-  console.log(`🎭 Anti-detection: ${MIN_INTERVAL_SECONDS}s min, ±30% jitter, 8% skip`)
   console.log(`📦 Build: ${process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || "local"} @ ${new Date().toISOString()}`)
   console.log("=================================================\n")
 
