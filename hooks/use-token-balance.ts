@@ -1,75 +1,118 @@
 "use client"
 
-import { useBalance } from "wagmi"
-import { type Address } from "viem"
+import { useEffect, useState, useCallback } from "react"
+import { type Address, formatUnits } from "viem"
+import { createPublicClient, http } from "viem"
 import { robinhoodChain } from "@/lib/chain-config"
 
-interface TokenBalance {
+const RPC_URL =
+  process.env.NEXT_PUBLIC_HOODBUMP_ALCHEMY_URL ||
+  process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL ||
+  "https://rpc.mainnet.chain.robinhood.com"
+
+const publicClient = createPublicClient({
+  chain: robinhoodChain,
+  transport: http(RPC_URL),
+})
+
+interface Balance {
   formatted: string
   symbol: string
   value: bigint
 }
 
 /**
- * Get ETH (native) and token balances for the given wallet address.
- *
- * IMPORTANT: The wallet address MUST be passed explicitly from page.tsx
- * (which derives it from Privy wallets). Earlier versions called
- * useSmartWalletAddress internally, which had timing issues — the
- * address was often null on first render even after login.
- *
- * Usage:
- *   const { eth, weth, refetch } = useUserBalances(walletAddress)
+ * Direct RPC balance fetcher — bypasses wagmi/Privy state.
+ * Simpler, no hydration races.
  */
 export function useUserBalances(walletAddress: string | null) {
-  // Only query when address is set
-  const enabled = !!walletAddress
+  const [eth, setEth] = useState<Balance | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Native ETH balance (for gas)
-  const ethBalanceQuery = useBalance({
-    address: walletAddress ?? undefined,
-    chainId: robinhoodChain.id,
-    query: { enabled, refetchInterval: 15_000 },
-  })
+  const fetchEth = useCallback(async () => {
+    if (!walletAddress) {
+      setEth(null)
+      return
+    }
+    setIsLoading(true)
+    try {
+      const bal = await publicClient.getBalance({
+        address: walletAddress as Address,
+      })
+      setEth({
+        value: bal,
+        formatted: formatUnits(bal, 18),
+        symbol: bal.symbol ?? "ETH",
+      })
+    } catch (err) {
+      console.error("[useUserBalances] ETH fetch failed:", err)
+      setEth(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [walletAddress])
 
-  // Token balance (e.g., WETH) — only if explicitly requested
-  // (Note: caller should use useWethBalance separately for clarity)
+  useEffect(() => {
+    fetchEth()
+    if (!walletAddress) return
+    const interval = setInterval(fetchEth, 15_000)
+    return () => clearInterval(interval)
+  }, [walletAddress, fetchEth])
 
-  return {
-    eth: ethBalanceQuery.data
-      ? {
-          formatted: ethBalanceQuery.data.formatted,
-          symbol: ethBalanceQuery.data.symbol,
-          value: ethBalanceQuery.data.value,
-        }
-      : null,
-    isLoading: ethBalanceQuery.isLoading,
-    refetch: () => ethBalanceQuery.refetch(),
-  }
+  return { eth, isLoading, refetch: fetchEth }
 }
 
-/**
- * Get WETH (ERC-20 token) balance for the given wallet address.
- * Separate hook so we don't conflate with ETH native balance.
- */
 export function useWethBalance(walletAddress: string | null, wethAddress: Address) {
-  const enabled = !!walletAddress
-  const tokenQuery = useBalance({
-    address: walletAddress ?? undefined,
-    token: wethAddress,
-    chainId: robinhoodChain.id,
-    query: { enabled, refetchInterval: 15_000 },
-  })
+  const [weth, setWeth] = useState<Balance | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  return {
-    weth: tokenQuery.data
-      ? {
-          formatted: tokenQuery.data.formatted,
-          symbol: tokenQuery.data.symbol,
-          value: tokenQuery.data.value,
-        }
-      : null,
-    isLoading: tokenQuery.isLoading,
-    refetch: () => tokenQuery.refetch(),
-  }
+  const fetchWeth = useCallback(async () => {
+    if (!walletAddress) {
+      setWeth(null)
+      return
+    }
+    setIsLoading(true)
+    try {
+      const bal = await publicClient.readContract({
+        address: wethAddress,
+        abi: [
+          {
+            name: "balanceOf",
+            type: "function",
+            stateMutability: "view",
+            inputs: [{ name: "owner", type: "address" }],
+            outputs: [{ name: "", type: "uint256" }],
+          },
+          {
+            name: "symbol",
+            type: "function",
+            stateMutability: "view",
+            inputs: [],
+            outputs: [{ name: "", type: "string" }],
+          },
+        ] as const,
+        functionName: "balanceOf",
+        args: [walletAddress as Address],
+      })
+      setWeth({
+        value: bal as bigint,
+        formatted: formatUnits(bal as bigint, 18),
+        symbol: "WETH",
+      })
+    } catch (err) {
+      console.error("[useWethBalance] WETH fetch failed:", err)
+      setWeth(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [walletAddress, wethAddress])
+
+  useEffect(() => {
+    fetchWeth()
+    if (!walletAddress) return
+    const interval = setInterval(fetchWeth, 15_000)
+    return () => clearInterval(interval)
+  }, [walletAddress, wethAddress, fetchWeth])
+
+  return { weth, isLoading, refetch: fetchWeth }
 }
