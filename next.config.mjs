@@ -25,13 +25,17 @@ const nextConfig = {
     // index.mjs auto-imports these at module load time
     config.resolve.alias = {
       ...config.resolve.alias,
-      // Coinbase SDK — auto-imported by @privy-io/react-auth but
+      // Coinbase SDK — auto-imported by @privy-io/react-auth.
       // Coinbase Smart Wallet doesn't support Robinhood Chain (4663).
-      // Stub it out to prevent crashes on init.
-      '@coinbase/wallet-sdk': false,
+      // Use a stub module instead of false (which gives undefined exports).
+      // The stub provides no-op createCoinbaseWalletSDK to prevent crashes.
+      '@coinbase/wallet-sdk$': require.resolve('./stubs/coinbase-wallet-sdk.js'),
       // WalletConnect — also auto-imported. We use Privy embedded
       // wallets + wagmi, don't need WC provider here.
       '@walletconnect/ethereum-provider': false,
+      // Safe Apps SDK — wagmi/connectors optional dep we don't use
+      '@safe-global/safe-apps-sdk': false,
+      '@safe-global/safe-apps-provider': false,
     }
 
     if (!isServer) {
