@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback } from "react"
 import { useSendTransaction } from "@privy-io/react-auth"
-import { encodeAbiParameters, encodeFunctionData, type Address, parseUnits, type Hex } from "viem"
+import { encodeFunctionData, type Address, parseUnits, type Hex } from "viem"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 
 export interface BotWalletToFund {
@@ -17,21 +17,6 @@ export interface FundConfig {
   wethAmount: string
 }
 
-const KERNEL_BATCH_MODE: Hex = "0x0100000000000000000000000000000000000000000000000000000000000000"
-
-const KERNEL_ABI = [
-  {
-    name: "execute",
-    type: "function",
-    stateMutability: "payable",
-    inputs: [
-      { name: "mode", type: "bytes32" },
-      { name: "executionData", type: "bytes" },
-    ],
-    outputs: [{ name: "returnData", type: "bytes[]" }],
-  },
-] as const
-
 const ERC20_ABI = [
   {
     name: "transfer",
@@ -45,21 +30,11 @@ const ERC20_ABI = [
   },
 ] as const
 
-interface Call {
-  to: Address
-  value: bigint
-  data: Hex
-}
-
 /**
- * Fund bot wallets via Privy Kernel smart wallet's batched execute.
+ * Fund bot wallets from the user's connected smart wallet.
  *
- * 1 userOp = 1 signature = N atomic calls.
- * 10 wallets × (1 ETH + 1 WETH) = 20 calls in 1 signature.
- *
- * Encodes Kernel's `execute(mode=0x01, calls[])` and sends to the
- * smart wallet's own address — the smart wallet decodes and runs
- * all calls atomically. User signs once in Phantom.
+ * Sequential one-by-one — Privy dashboard is configured to batch
+ * userOps without multiple popups. Each step = 1 ETH transfer + 1 WETH transfer.
  */
 export function useFundBotWallets(
   smartWalletAddress: string | null,
@@ -70,7 +45,6 @@ export function useFundBotWallets(
   const [isRunning, setIsRunning] = useState(false)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const cancelRef = useRef(false)
 
   const fund = useCallback(async () => {
     if (!smartWalletAddress) {
@@ -86,90 +60,46 @@ export function useFundBotWallets(
     const ethWei = parseUnits(config.ethAmount, 18)
     const wethWei = parseUnits(config.wethAmount, 18)
 
-    cancelRef.current = false
     setIsRunning(true)
     setError(null)
     setTxHash(null)
 
     try {
-      // Build batched calls
-      const calls: Call[] = []
+      let lastHash: `0x${string}` | null = null
 
       for (const wallet of targets) {
-        if (cancelRef.current) break
-
-        // ETH transfer (native)
         if (ethWei > 0n) {
-          calls.push({
-            to: wallet.address,
-            value: ethWei,
-            data: "0x",
-          })
+          const { hash } = await sendTransaction(
+            {
+              to: wallet.address,
+              value: ethWei,
+              chainId: 4663,
+            },
+            { address: smartWalletAddress }
+          )
+          lastHash = hash
         }
 
-        // WETH transfer (ERC-20)
         if (wethWei > 0n) {
-          const wethData = encodeFunctionData({
+          const data = encodeFunctionData({
             abi: ERC20_ABI,
             functionName: "transfer",
             args: [wallet.address, wethWei],
           })
-          calls.push({
-            to: RH_WETH_ADDRESS,
-            value: 0n,
-            data: wethData,
-          })
+          const { hash } = await sendTransaction(
+            {
+              to: RH_WETH_ADDRESS,
+              data,
+              value: BigInt(0),
+              chainId: 4663,
+            },
+            { address: smartWalletAddress }
+          )
+          lastHash = hash
         }
       }
 
-      if (calls.length === 0) {
-        throw new Error("No calls to execute (set ETH or WETH amount > 0)")
-      }
-
-      // Encode executionData: abi.encode(Call[])
-      const executionData = encodeAbiParameters(
-        [
-          {
-            name: "calls",
-            type: "tuple[]",
-            components: [
-              { name: "to", type: "address" },
-              { name: "value", type: "uint256" },
-              { name: "data", type: "bytes" },
-            ],
-          },
-        ],
-        [
-          calls.map((c) => ({
-            to: c.to,
-            value: c.value,
-            data: c.data,
-          })),
-        ]
-      )
-
-      // Encode Kernel.execute(mode, executionData)
-      const txData = encodeFunctionData({
-        abi: KERNEL_ABI,
-        functionName: "execute",
-        args: [KERNEL_BATCH_MODE, executionData],
-      })
-
-      // Total ETH value (sum of all ETH transfers)
-      const totalValue = calls.reduce((sum, c) => sum + c.value, BigInt(0))
-
-      // 1 userOp, 1 signature
-      const { hash } = await sendTransaction(
-        {
-          to: smartWalletAddress as `0x${string}`,
-          data: txData,
-          value: totalValue,
-          chainId: 4663,
-        },
-        { address: smartWalletAddress }
-      )
-
-      setTxHash(hash)
+      setTxHash(lastHash)
     } catch (err: any) {
       setError(err.message || "Funding failed")
     } finally {
@@ -188,6 +118,5 @@ export function useFundBotWallets(
     isRunning,
     txHash,
     error,
-    callCount: config.walletCount * (parseFloat(config.ethAmount) > 0 ? 1 : 0) + config.walletCount * (parseFloat(config.wethAmount) > 0 ? 1 : 0),
   }
 }
