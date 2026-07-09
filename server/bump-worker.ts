@@ -200,7 +200,8 @@ async function processUserCycle(state: {
       console.log(`   📝 Approving WETH...`)
       const approvalData = `0x095ea7b3${allowanceTarget
         .slice(2)
-        .toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff` as `0x${string}`
+        .toLowerCase()
+        .padStart(64, "0")}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff` as `0x${string}`
 
       try {
         const approvalHash = await signAndSendTransaction(
