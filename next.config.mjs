@@ -21,15 +21,17 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
+    const stubPath = require.resolve('./stubs/coinbase-wallet-sdk.js')
     // Apply aliases on BOTH server and client since Privy's main
     // index.mjs auto-imports these at module load time
     config.resolve.alias = {
       ...config.resolve.alias,
       // Coinbase SDK — auto-imported by @privy-io/react-auth.
       // Coinbase Smart Wallet doesn't support Robinhood Chain (4663).
-      // Use a stub module instead of false (which gives undefined exports).
-      // The stub provides no-op createCoinbaseWalletSDK to prevent crashes.
-      '@coinbase/wallet-sdk$': require.resolve('./stubs/coinbase-wallet-sdk.js'),
+      // Catch BOTH the bare import AND the subpath imports
+      // (Privy bundles a few: dist/CoinbaseWalletSDK, dist/createCoinbaseWalletSDK, etc.)
+      '@coinbase/wallet-sdk$': stubPath,
+      '@coinbase/wallet-sdk': stubPath,
       // WalletConnect — also auto-imported. We use Privy embedded
       // wallets + wagmi, don't need WC provider here.
       '@walletconnect/ethereum-provider': false,
