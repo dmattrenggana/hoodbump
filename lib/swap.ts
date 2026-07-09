@@ -230,10 +230,12 @@ export async function executeEthSwap(params: {
     steps[steps.length - 1].status = "ok"
     steps[steps.length - 1].detail = `ETH: ${(Number(ethBalance) / 1e18).toFixed(6)}`
 
-    // Get quote (0x v2 handles native ETH when sellToken=ETH)
+    // Get quote (0x v2 uses canonical ETH address 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
+    // for native ETH sells, NOT the string "ETH")
     steps.push({ step: "get_quote", status: "info", detail: `Calling 0x v2 quote (native ETH → buy token)` })
+    const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address
     const quote = await getZeroXQuote({
-      sellToken: "ETH" as any, // 0x v2 accepts "ETH" string for native
+      sellToken: ETH_ADDRESS,
       buyToken,
       sellAmount,
       takerAddress: wallet.address as `0x${string}`,

@@ -14,6 +14,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { isAddress, getAddress } from "viem"
+const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
 import { executeBotSwap, executeEthSwap } from "@/lib/swap"
 import { getTokenMetadata } from "@/lib/token-name"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const sellAmount = BigInt(sellAmountWei)
-    const sellToken = useNativeEth ? "ETH" : RH_WETH_ADDRESS
+    const sellToken = useNativeEth ? ETH_ADDRESS : RH_WETH_ADDRESS
 
     console.log(`\n[ManualSwap] user=${userAddress} wallet=${walletIndex} useNativeEth=${useNativeEth}`)
     console.log(`[ManualSwap] sellToken=${sellToken} buyToken=${normalizedBuyToken} sellAmount=${sellAmount.toString()}`)
