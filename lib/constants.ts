@@ -111,15 +111,11 @@ export const MAX_INTERVAL_SECONDS = 600 // 10 minutes maximum
 
 // Bot wallet config
 export const WALLETS_PER_USER = 10
-export const MASTER_ENCRYPTION_KEY = process.env.MASTER_ENCRYPTION_KEY!
+export const MASTER_ENCRYPTION_KEY = process.env.MASTER_ENCRYPTION_KEY || ""
 
-// Validate on import
-if (!MASTER_ENCRYPTION_KEY) {
-  console.warn(
-    "⚠️ MASTER_ENCRYPTION_KEY not set. Bot wallet creation will fail. " +
-      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
-  )
-}
+// Validation moved to /api/env-check endpoint (server-side only)
+// Don't warn on import - prevents client console noise
+
 
 // 0x API key (get from https://dashboard.0x.org)
 export const ZEROX_API_KEY = process.env.ZEROX_API_KEY || ""
