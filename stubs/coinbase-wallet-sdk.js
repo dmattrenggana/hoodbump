@@ -1,32 +1,47 @@
 // Stub for @coinbase/wallet-sdk
 // Prevents Coinbase SDK from initializing (Robinhood Chain unsupported)
 //
-// Real exports needed by Privy/wagmi:
-//   - createCoinbaseWalletSDK: returns a fake SDK object with no-op methods
-//   - default: same as createCoinbaseWalletSDK
-//
-// All methods are async functions that return undefined or throw to prevent
-// any Coinbase-related code from running.
+// Returns a Proxy that accepts ANY method call without crashing.
+// All methods return undefined or Promise.resolve(undefined).
+// All property accesses return deep proxies to allow chaining.
 
-// Fake SDK class - mimics the CoinbaseWalletSDK interface
-class FakeCoinbaseWalletSDK {
-  constructor() {
-    // Empty constructor
+function createProxy(target = {}) {
+  const handler = {
+    get(t, prop) {
+      // Common methods that wagmi/Privy expect
+      if (prop === "then") return undefined  // not a thenable
+      if (prop === Symbol.toPrimitive) return undefined
+      if (prop === Symbol.iterator) return undefined
+
+      // Create a deep proxy that returns more proxies
+      // for any property access — fully duck-typed
+      return new Proxy(function() {}, {
+        get: (_, p) => {
+          if (p === "then") return undefined
+          if (p === "catch" || p === "finally") {
+            return (fn) => Promise.resolve(undefined).then(fn).catch(() => {})
+          }
+          // For method calls on the result, return more proxy
+          return createProxy()[p] || createProxy()
+        },
+        apply: () => createProxy(),
+        construct: () => createProxy(),
+      })
+    },
+    apply: () => createProxy(),
+    construct: () => createProxy(),
+    set: () => true,
+    has: () => true,
   }
-  // No-op methods that Privy/wagmi might call
-  async makeWeb3Provider() { return null }
-  async getAddress() { return null }
-  async disconnect() {}
+  return new Proxy(target, handler)
 }
 
-// createCoinbaseWalletSDK returns the fake SDK
 export function createCoinbaseWalletSDK() {
-  return new FakeCoinbaseWalletSDK()
+  // Return a Proxy that accepts ANY method/property access
+  return createProxy()
 }
 
-// Default export (some modules use default import)
 export default createCoinbaseWalletSDK
 
-// Other potential exports (no-ops)
-export const CoinbaseWalletSDK = FakeCoinbaseWalletSDK
-export const SubAccountSigner = class {}
+// Other named exports that might be imported
+export const CoinbaseWalletSDK = createCoinbaseWalletSDK
