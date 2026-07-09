@@ -35,7 +35,7 @@ import {
   signAndSendTransaction,
   getPublicClient,
 } from "../lib/bot-wallet"
-import { getZeroXQuote, buildSwapFromQuote, formatZeroXError } from "../lib/swap"
+import { getZeroXQuote, buildSwapFromQuote, formatZeroXError, executeEthSwap } from "../lib/swap"
 import { encodeFunctionData } from "viem"
 import {
   getNextInterval,
@@ -108,25 +108,25 @@ async function processUserCycle(state: {
     const amountWei = getVariableAmount(baseAmountWei)
     console.log(`   Amount: ${(Number(amountWei) / 1e18).toFixed(6)} ETH ($${session.amount_usd})`)
 
-    // 5. Find next wallet with sufficient balance (skip empty wallets)
-    // This prevents the worker from getting stuck on one wallet when only
-    // one has funds — picks the first wallet with WETH >= amountWei.
+    // 5. Find next wallet with sufficient ETH balance (skip empty wallets)
+    // Worker uses native ETH (no WETH wrap, no approve needed).
     const { findNextWalletWithBalance } = await import("../lib/wallet-selector")
     const walletResult = await findNextWalletWithBalance(
       botWallets.map((w, i) => ({ index: i, address: w.address as `0x${string}` })),
       session.wallet_rotation_index % WALLETS_PER_USER,
       amountWei,
-      process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL!
+      process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL!,
+      "ETH"
     )
     if (!walletResult) {
-      console.log(`   🛑 All bot wallets depleted (no wallet has ${(Number(amountWei) / 1e18).toFixed(6)} WETH)`)
+      console.log(`   🛑 All bot wallets depleted (no wallet has ${(Number(amountWei) / 1e18).toFixed(6)} ETH)`)
       await deactivateSession(userAddress, "All bot wallets depleted")
       return { shouldContinue: false }
     }
     const walletIndex = walletResult.index
     const currentWallet = botWallets[walletIndex]
-    const wethBalance = walletResult.balance
-    console.log(`\n🔄 [${userAddress}] Wallet #${walletIndex + 1}: ${currentWallet.address} (WETH: ${(Number(wethBalance) / 1e18).toFixed(6)})`)
+    const ethBalance = walletResult.balance
+    console.log(`\n🔄 [${userAddress}] Wallet #${walletIndex + 1}: ${currentWallet.address} (ETH: ${(Number(ethBalance) / 1e18).toFixed(6)})`)
 
     const publicClient = getPublicClient()
 
@@ -163,105 +163,23 @@ async function processUserCycle(state: {
       return { shouldContinue: true }
     }
 
-    // 8. Approve WETH to AllowanceHolder (REQUIRED on Robinhood's standard AllowanceHolder)
-    // The Robinhood AllowanceHolder is the standard 0x v2 AllowanceHolder contract which
-    // does regular ERC20 `transferFrom(owner, recipient, amount)` internally — it needs
-    // an actual ERC20 allowance (NOT Permit2). Without approve, exec() reverts silently.
-    //
-    // Note: quote.allowanceTarget is the spender (AllowanceHolder address).
-    const txParams = buildSwapFromQuote(quote)
-    const allowanceTarget = txParams.allowanceTarget
-    console.log(`   🔍 AllowanceHolder: ${allowanceTarget}`)
-
-    const currentAllowance = (await publicClient.readContract({
-      address: RH_WETH_ADDRESS,
-      abi: [
-        {
-          name: "allowance",
-          type: "function",
-          stateMutability: "view",
-          inputs: [
-            { name: "owner", type: "address" },
-            { name: "spender", type: "address" },
-          ],
-          outputs: [{ name: "", type: "uint256" }],
-        },
-      ],
-      functionName: "allowance",
-      args: [
-        currentWallet.address as `0x${string}`,
-        allowanceTarget,
-      ],
-    })) as bigint
-
-    if (currentAllowance < amountWei) {
-      console.log(
-        `   🔓 Approving WETH → ${allowanceTarget.slice(0, 10)}... (current ${(Number(currentAllowance) / 1e18).toFixed(6)}, need ${(Number(amountWei) / 1e18).toFixed(6)})`
-      )
-      // MAX_UINT256 = (2n ** 256n) - 1n
-      const MAX_UINT256 = (1n << 256n) - 1n
-      const approveHash = await signAndSendTransaction(
-        userAddress,
-        walletIndex,
-        {
-          to: RH_WETH_ADDRESS,
-          data: encodeFunctionData({
-            abi: [
-              {
-                name: "approve",
-                type: "function",
-                stateMutability: "nonpayable",
-                inputs: [
-                  { name: "spender", type: "address" },
-                  { name: "amount", type: "uint256" },
-                ],
-                outputs: [{ name: "", type: "bool" }],
-              },
-            ],
-            functionName: "approve",
-            args: [allowanceTarget, MAX_UINT256],
-          }),
-          value: 0n,
-          gas: 60000n, // explicit gas for ERC20 approve (avoid estimateGas edge cases)
-        }
-      )
-      const approveReceipt = await publicClient.waitForTransactionReceipt({
-        hash: approveHash,
-        confirmations: 1,
-      })
-      if (approveReceipt.status !== "success") {
-        throw new Error(`Approve reverted`)
-      }
-      console.log(`   ✅ Approved (block ${approveReceipt.blockNumber})`)
-    } else {
-      console.log(`   ✅ Existing allowance sufficient`)
-    }
-
-    // 9. Execute swap (with 20% gas buffer for safety)
-    const swapGas = (txParams.gasLimit * 120n) / 100n
-    console.log(`   📤 Sending swap tx (gas=${swapGas})...`)
-    const swapHash = await signAndSendTransaction(
+    // 8. Execute ETH swap via 0x v2 (uses Settler contract)
+    // No WETH wrap, no approve step — just send ETH value with swap calldata.
+    console.log(`   📤 Sending ETH swap tx...`)
+    const ethSwapResult = await executeEthSwap({
       userAddress,
       walletIndex,
-      {
-        to: txParams.to,
-        data: txParams.data,
-        value: txParams.value,
-        gas: swapGas,
-      }
-    )
+      buyToken: session.token_address as `0x${string}`,
+      sellAmount: amountWei,
+    })
+
+    if (!ethSwapResult.success) {
+      throw new Error(ethSwapResult.error || "ETH swap failed")
+    }
+
+    const swapHash = ethSwapResult.swapHash!
     console.log(`   🔗 Swap tx: ${swapHash}`)
     console.log(`   🔗 Explorer: https://robinhoodchain.blockscout.com/tx/${swapHash}`)
-
-    // 10. Wait for confirmation
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: swapHash as `0x${string}`,
-      confirmations: 1,
-    })
-    console.log(`   ✅ Swap confirmed in block ${receipt.blockNumber}`)
-
-    // 11. On-chain is source of truth — skip DB balance update.
-    // Bot log records the tx hash + amount; balances read live from chain.
 
     // Look up buy token name for friendly log message (with cache)
     const { getTokenMetadata } = await import("../lib/token-name")
@@ -277,7 +195,7 @@ async function processUserCycle(state: {
       tx_hash: swapHash,
       amount_wei: amountWei.toString(),
       token_address: session.token_address,
-      message: `[Worker] Swapped ${(Number(amountWei) / 1e18).toFixed(6)} WETH → ${buyTokenSymbol} (wallet #${walletIndex + 1}: ${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)})`,
+      message: `[Worker] Swapped ${(Number(amountWei) / 1e18).toFixed(6)} ETH → ${buyTokenSymbol} (wallet #${walletIndex + 1}: ${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)})`,
     })
 
     // 12. Rotate wallet

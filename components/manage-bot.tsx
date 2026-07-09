@@ -145,9 +145,6 @@ export function ManageBot({ userAddress }: ManageBotProps) {
                       <p className="text-xs font-mono">
                         {formatEth(BigInt(w.ethBalanceWei || "0"))} ETH
                       </p>
-                      <p className="text-xs font-mono text-muted-foreground">
-                        {formatEth(BigInt(w.wethBalanceWei || "0"))} WETH
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -184,22 +181,19 @@ function FundingPanel({
   onComplete: () => void
 }) {
   const [walletCount, setWalletCount] = useState(1)
-  const [ethAmount, setEthAmount] = useState("0.0001")
-  const [wethAmount, setWethAmount] = useState("0.0003")
+  const [ethAmount, setEthAmount] = useState("0.001")
   const [showProgress, setShowProgress] = useState(false)
 
   const { fund, reset, isRunning, results, error } =
     useFundBotWallets(smartWalletAddress, botWallets, {
       walletCount,
       ethAmount,
-      wethAmount,
     })
 
   const handleFund = async () => {
     const ethNum = parseFloat(ethAmount) || 0
-    const wethNum = parseFloat(wethAmount) || 0
-    if (ethNum <= 0 && wethNum <= 0) {
-      toast.error("Set ETH or WETH amount > 0")
+    if (ethNum <= 0) {
+      toast.error("Set ETH amount > 0")
       return
     }
     setShowProgress(true)
@@ -226,11 +220,11 @@ function FundingPanel({
           </div>
 
           <p className="text-xs text-muted-foreground mb-4">
-            Send ETH + WETH to multiple bot wallets in a single signed transaction
-            via smart wallet batch execution. Atomic — all succeed or all fail.
+            Send native ETH to multiple bot wallets (sequential 1-by-1). 
+            ETH covers both gas + swap input — no WETH wrap needed.
           </p>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             <div>
               <Label htmlFor="wallet-count" className="text-xs">
                 Wallets
@@ -248,7 +242,7 @@ function FundingPanel({
             </div>
             <div>
               <Label htmlFor="eth-amount" className="text-xs">
-                ETH each
+                ETH each (covers gas + swap)
               </Label>
               <Input
                 id="eth-amount"
@@ -256,20 +250,6 @@ function FundingPanel({
                 inputMode="decimal"
                 value={ethAmount}
                 onChange={(e) => setEthAmount(e.target.value)}
-                className="h-9 font-mono text-sm"
-                disabled={isRunning}
-              />
-            </div>
-            <div>
-              <Label htmlFor="weth-amount" className="text-xs">
-                WETH each
-              </Label>
-              <Input
-                id="weth-amount"
-                type="text"
-                inputMode="decimal"
-                value={wethAmount}
-                onChange={(e) => setWethAmount(e.target.value)}
                 className="h-9 font-mono text-sm"
                 disabled={isRunning}
               />
@@ -287,13 +267,10 @@ function FundingPanel({
             <p>
               Send: <span className="text-foreground font-mono">
                 {(walletCount * parseFloat(ethAmount || "0")).toFixed(6)} ETH
-              </span>{" "}
-              + <span className="text-foreground font-mono">
-                {(walletCount * parseFloat(wethAmount || "0")).toFixed(6)} WETH
               </span>
             </p>
             <p className="mt-1">
-              To: {walletCount} wallet{walletCount > 1 ? "s" : ""} ({ethAmount} ETH + {wethAmount} WETH each)
+              To: {walletCount} wallet{walletCount > 1 ? "s" : ""} ({ethAmount} ETH each)
             </p>
           </div>
 
@@ -447,31 +424,7 @@ function FundStatusModal({
                       {r.eth.error.slice(0, 30)}...
                     </span>
                   )}
-
-                  <span className="text-muted-foreground ml-2">WETH:</span>
-                  {r.weth.status === "success" ? (
-                    <span className="text-primary">✓</span>
-                  ) : r.weth.status === "error" ? (
-                    <span className="text-destructive">✗</span>
-                  ) : r.weth.status === "pending" ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : null}
-                  {r.weth.hash && (
-                    <a
-                      href={`https://robinhoodchain.blockscout.com/tx/${r.weth.hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  )}
                 </div>
-                {r.weth.error && (
-                  <p className="text-destructive text-xs mt-1 truncate" title={r.weth.error}>
-                    WETH: {r.weth.error.slice(0, 40)}
-                  </p>
-                )}
               </div>
             ))}
           </div>
