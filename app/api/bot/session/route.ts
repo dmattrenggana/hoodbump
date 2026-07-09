@@ -117,9 +117,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
-      console.error("❌ Create session error:", error)
+      console.error("❌ Create session error:", JSON.stringify(error, null, 2))
       return NextResponse.json(
-        { error: "Failed to create session", details: error.message },
+        { error: "Failed to create session", details: error.message, code: error.code },
         { status: 500 }
       )
     }
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("❌ Start session error:", error)
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: error.message || "Internal server error", stack: error.stack?.slice(0, 300) },
       { status: 500 }
     )
   }

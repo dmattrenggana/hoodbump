@@ -59,6 +59,7 @@ const activeUsers = new Map<
     session: BotSession
     timeoutId: NodeJS.Timeout | null
     consecutiveFailures: number
+    swapCount: number  // total swaps since session start (for true round-robin)
   }
 >()
 
@@ -108,12 +109,13 @@ async function processUserCycle(state: {
     const amountWei = getVariableAmount(baseAmountWei)
     console.log(`   Amount: ${(Number(amountWei) / 1e18).toFixed(6)} ETH ($${session.amount_usd})`)
 
-    // 5. Find next wallet with sufficient ETH balance (skip empty wallets)
-    // Worker uses native ETH (no WETH wrap, no approve needed).
-    const { findNextWalletWithBalance } = await import("../lib/wallet-selector")
-    const walletResult = await findNextWalletWithBalance(
+    // 5. Pick wallet via TRUE round-robin across all funded wallets
+    // Use swapCount (incremented each cycle) to cycle through funded wallets evenly,
+    // instead of just sticking to the first wallet with balance.
+    const { findNthWalletWithBalance } = await import("../lib/wallet-selector")
+    const walletResult = await findNthWalletWithBalance(
       botWallets.map((w, i) => ({ index: i, address: w.address as `0x${string}` })),
-      session.wallet_rotation_index % WALLETS_PER_USER,
+      state.swapCount,
       amountWei,
       process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL!,
       "ETH"
@@ -202,7 +204,10 @@ async function processUserCycle(state: {
     // 12. Rotate wallet
     const nextIndex = (walletIndex + 1) % WALLETS_PER_USER
     await updateSessionRotation(session.id, nextIndex)
-    
+
+    // Increment total swap count for round-robin distribution
+    state.swapCount++
+
     // Reset failure count on success
     state.consecutiveFailures = 0
 
@@ -271,6 +276,7 @@ async function pollActiveSessions() {
           session,
           timeoutId: null as NodeJS.Timeout | null,
           consecutiveFailures: 0,
+          swapCount: 0,
         }
         activeUsers.set(session.user_address, state)
         // Start immediately
