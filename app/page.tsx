@@ -168,6 +168,11 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Bot Wallets Section */}
+          <div className="mb-4">
+            <ManageBot />
+          </div>
+
           {/* Phase indicator */}
           <div className="border border-border rounded-lg bg-card p-4 mb-4">
             <h3 className="text-xs font-semibold text-muted-foreground mb-3">
@@ -176,11 +181,11 @@ export default function Home() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-primary">✓</span>
-                <span>Phase 1: Foundation (current)</span>
+                <span>Phase 1: Foundation</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>○</span>
-                <span>Phase 2: Smart Wallets (5 bot wallets)</span>
+              <div className="flex items-center gap-2">
+                <span className="text-primary">✓</span>
+                <span>Phase 2: Bot Wallets (current)</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>○</span>
@@ -214,7 +219,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="text-center text-xs text-muted-foreground mt-6">
-        HoodBump v0.1.0 · Robinhood Chain · Phase 1
+        HoodBump v0.1.0 · Robinhood Chain · Phase 2
       </footer>
     </main>
   )
