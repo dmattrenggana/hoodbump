@@ -44,7 +44,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
         appearance: {
           theme: "dark",
           accentColor: "#00ff00", // HoodBump neon green
-          logo: "/icon.svg",
+          logo: "/icon.png",
         },
         embeddedWallets: {
           ethereum: {
@@ -54,6 +54,8 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
         smartWallets: {
           enabled: true,
           createOnLogin: "all-users",
+          // Explicit type to avoid Coinbase Smart Wallet (doesn't support Robinhood Chain)
+          smartWalletType: "kernel",
         },
         defaultChain: robinhoodChain,
         supportedChains: [robinhoodChain],
