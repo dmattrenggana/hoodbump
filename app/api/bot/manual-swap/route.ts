@@ -79,8 +79,14 @@ export async function POST(request: NextRequest) {
       console.log(`[ManualSwap] https://robinhoodchain.blockscout.com/tx/${result.swapHash}`)
     }
 
-    return NextResponse.json({
+    // Convert BigInt fields to strings for JSON serialization
+    const serializedResult = {
       ...result,
+      buyAmount: result.buyAmount !== undefined ? result.buyAmount.toString() : undefined,
+    }
+
+    return NextResponse.json({
+      ...serializedResult,
       sellTokenSymbol: sellTokenMeta.symbol,
       buyTokenSymbol: buyTokenMeta.symbol,
       buyTokenDecimals: buyTokenMeta.decimals,
