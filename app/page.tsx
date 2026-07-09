@@ -7,6 +7,8 @@ import { Wallet, LogOut, Zap, Loader2 } from "lucide-react"
 import { formatEth } from "@/lib/format"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 import { ManageBot } from "@/components/manage-bot"
+import { ConfigPanel } from "@/components/config-panel"
+import { ActivityFeed } from "@/components/activity-feed"
 import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
 import { useUserBalances } from "@/hooks/use-token-balance"
 
@@ -154,6 +156,16 @@ export default function Home() {
           {/* Bot Wallets Section */}
           <div className="mb-4">
             <ManageBot />
+          </div>
+
+          {/* Config Panel */}
+          <div className="mb-4">
+            <ConfigPanel />
+          </div>
+
+          {/* Activity Feed */}
+          <div className="mb-4">
+            <ActivityFeed />
           </div>
 
           {/* Phase indicator */}
