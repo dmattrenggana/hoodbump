@@ -75,3 +75,51 @@ export const HOODBUMP_TOKEN_DECIMALS = 18
 // ============================================
 export const ZEROX_API_BASE = "https://api.0x.org"
 export const ROBINHOOD_CHAIN_ID_0X = "4663" // 0x API chain ID for Robinhood Chain
+
+// ============================================
+// HoodBump Bot Configuration
+// ============================================
+// Decisions made 2026-07-09
+
+// 1A: Swap provider
+export const SWAP_PROVIDER = "0x" as const
+
+// 2D: Affiliate fee (1%)
+export const AFFILIATE_FEE_BPS = 100
+
+// 3B: Slippage tolerance (1%)
+export const SLIPPAGE_BPS = 100
+
+// 4A: Treasury address (shared with ClawdBump)
+export const HOODBUMP_TREASURY_ADDRESS =
+  "0x43d9a5cb3c0299e3de882e10036ee9de0497f234" as const
+
+// 5A: Anti-detection (basic: variable ±30% + 8% skip)
+export const ANTI_DETECTION_CONFIG = {
+  intervalJitterPercent: 30,  // ±30% interval variance
+  skipRatePercent: 8,          // 8% cycles skipped
+  enabled: true,
+} as const
+
+// 6B: Minimum swap amount ($0.10 USD)
+export const MIN_SWAP_USD = 0.10
+
+// Default swap interval (60s)
+export const DEFAULT_INTERVAL_SECONDS = 60
+export const MIN_INTERVAL_SECONDS = 10  // 10s minimum (anti-bot)
+export const MAX_INTERVAL_SECONDS = 600 // 10 minutes maximum
+
+// Bot wallet config
+export const WALLETS_PER_USER = 10
+export const MASTER_ENCRYPTION_KEY = process.env.MASTER_ENCRYPTION_KEY!
+
+// Validate on import
+if (!MASTER_ENCRYPTION_KEY) {
+  console.warn(
+    "⚠️ MASTER_ENCRYPTION_KEY not set. Bot wallet creation will fail. " +
+      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+  )
+}
+
+// 0x API key (get from https://dashboard.0x.org)
+export const ZEROX_API_KEY = process.env.ZEROX_API_KEY || ""
