@@ -322,14 +322,6 @@ export function formatZeroXError(error: any): string {
  *
  * Handles the full flow:
  *   1. Check WETH balance
- *   2. Get 0x v2 quote (AllowanceHolder)
- *   3. Approve WETH → AllowanceHolder if needed (MAX_UINT256, one-time per wallet)
- *   4. Send swap tx with 20% gas buffer
- *   5. Wait for confirmation
- *
- * Returns structured result for API endpoints + workers.
- */
- *
  * Handles the full flow:
  *   1. Check WETH balance
  *   2. Get 0x v2 quote (AllowanceHolder)
