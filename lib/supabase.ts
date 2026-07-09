@@ -8,8 +8,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js"
  * 2. createSupabaseServiceClient() - for server-side (uses service role key)
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Fall back to non-NEXT_PUBLIC var names for Railway (which doesn't auto-prefix)
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Singleton for client-side (prevents multiple GoTrueClient instances)
