@@ -1,213 +1,113 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
-import { useStartSession, useStopSession, useBotSession } from "@/hooks/use-bot-session"
-import { isAddress, type Address } from "viem"
-import { Settings, Power, AlertCircle, Loader2, Check } from "lucide-react"
-import {
-  MIN_SWAP_USD,
-  MIN_INTERVAL_SECONDS,
-  MAX_INTERVAL_SECONDS,
-  DEFAULT_INTERVAL_SECONDS,
-} from "@/lib/constants"
+import { useState } from "react"
+import { Card } from "@/components/ui/card"
+import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { DollarSign, Clock, Zap } from "lucide-react"
 
-export function ConfigPanel() {
-  const userAddress = useSmartWalletAddress()
-  const { data: session, isLoading: isLoadingSession } = useBotSession(userAddress)
-  const startMutation = useStartSession(userAddress)
-  const stopMutation = useStopSession(userAddress)
+interface ConfigPanelProps {
+  buyAmountUsd: string
+  onChangeAmount: (amount: string) => void
+  intervalSeconds: number
+  onChangeInterval: (interval: number) => void
+  ethPriceUsd?: number
+}
 
-  const [tokenAddress, setTokenAddress] = useState("")
-  const [amountUsd, setAmountUsd] = useState("0.10")
-  const [intervalSeconds, setIntervalSeconds] = useState(DEFAULT_INTERVAL_SECONDS)
-  const [tokenValid, setTokenValid] = useState<boolean | null>(null)
-
-  const isRunning = session?.status === "running"
-
-  // Validate token address
-  useEffect(() => {
-    if (!tokenAddress) {
-      setTokenValid(null)
-      return
-    }
-    setTokenValid(isAddress(tokenAddress))
-  }, [tokenAddress])
-
-  // When session is running, populate fields from it
-  useEffect(() => {
-    if (session && session.status === "running") {
-      setTokenAddress(session.token_address)
-      setAmountUsd(session.amount_usd)
-      setIntervalSeconds(session.interval_seconds)
-    }
-  }, [session])
-
-  async function handleStart() {
-    if (!tokenValid) return
-    if (parseFloat(amountUsd) < MIN_SWAP_USD) return
-    if (intervalSeconds < MIN_INTERVAL_SECONDS) return
-
-    startMutation.mutate({
-      tokenAddress: tokenAddress as Address,
-      amountUsd,
-      intervalSeconds,
-    })
-  }
-
-  async function handleStop() {
-    stopMutation.mutate()
-  }
-
-  if (isLoadingSession) {
-    return (
-      <div className="border border-border rounded-lg bg-card p-6 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-2">Loading session...</p>
-      </div>
-    )
-  }
+export function ConfigPanel({
+  buyAmountUsd,
+  onChangeAmount,
+  intervalSeconds,
+  onChangeInterval,
+  ethPriceUsd = 3000,
+}: ConfigPanelProps) {
+  const ethAmount = parseFloat(buyAmountUsd) / ethPriceUsd
 
   return (
-    <div className="space-y-4">
-      {/* Session status banner */}
-      {isRunning && (
-        <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          <span className="text-sm font-semibold">Bot Running</span>
-          <span className="text-xs text-muted-foreground ml-auto">
-            Started {session?.started_at ? new Date(session.started_at).toLocaleTimeString() : ""}
-          </span>
-        </div>
-      )}
-
-      {/* Token address */}
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground mb-1 block">
-          TARGET TOKEN ADDRESS
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={tokenAddress}
-            onChange={(e) => setTokenAddress(e.target.value)}
-            disabled={isRunning}
-            placeholder="0x... (ERC-20 token on Robinhood Chain)"
-            className="w-full bg-secondary/30 border border-border rounded-lg p-3 pr-10 text-sm font-mono disabled:opacity-50"
-          />
-          {tokenValid === true && (
-            <Check className="h-4 w-4 text-primary absolute right-3 top-3.5" />
-          )}
-          {tokenValid === false && (
-            <AlertCircle className="h-4 w-4 text-red-500 absolute right-3 top-3.5" />
-          )}
-        </div>
-        {tokenValid === false && (
-          <p className="text-xs text-red-500 mt-1">Invalid Ethereum address</p>
-        )}
-      </div>
-
-      {/* Amount */}
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground mb-1 block">
-          AMOUNT PER SWAP (USD)
-        </label>
-        <div className="relative">
-          <span className="absolute left-3 top-3 text-muted-foreground">$</span>
-          <input
-            type="number"
-            min={MIN_SWAP_USD}
-            step="0.01"
-            value={amountUsd}
-            onChange={(e) => setAmountUsd(e.target.value)}
-            disabled={isRunning}
-            className="w-full bg-secondary/30 border border-border rounded-lg p-3 pl-7 text-sm font-mono disabled:opacity-50"
-          />
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Min: ${MIN_SWAP_USD.toFixed(2)} · With anti-detection ±30% variance per swap
-        </p>
-      </div>
-
-      {/* Interval slider */}
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <label className="text-xs font-semibold text-muted-foreground">
-            INTERVAL
-          </label>
-          <span className="text-sm font-mono">
-            {intervalSeconds}s{" "}
+    <Card className="bg-card border-border">
+      <div className="p-4 space-y-4">
+        {/* Buy amount */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              BUY AMOUNT
+            </Label>
             <span className="text-xs text-muted-foreground">
-              ({Math.floor(86400 / intervalSeconds)} swaps/day)
+              ≈ {ethAmount.toFixed(6)} ETH
             </span>
-          </span>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={buyAmountUsd}
+              onChange={(e) => onChangeAmount(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <div className="flex gap-1">
+              {["0.01", "0.05", "0.10", "0.50"].map((amt) => (
+                <button
+                  key={amt}
+                  onClick={() => onChangeAmount(amt)}
+                  className={`px-2 py-1 text-xs rounded border transition ${
+                    buyAmountUsd === amt
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  ${amt}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <input
-          type="range"
-          min={MIN_INTERVAL_SECONDS}
-          max={MAX_INTERVAL_SECONDS}
-          step={1}
-          value={intervalSeconds}
-          onChange={(e) => setIntervalSeconds(parseInt(e.target.value))}
-          disabled={isRunning}
-          className="w-full accent-primary disabled:opacity-50"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-          <span>{MIN_INTERVAL_SECONDS}s (aggressive)</span>
-          <span>{Math.floor(MAX_INTERVAL_SECONDS / 60)}m (conservative)</span>
+
+        {/* Interval */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              INTERVAL
+            </Label>
+            <span className="text-xs font-mono">
+              {intervalSeconds < 60
+                ? `${intervalSeconds}s`
+                : `${Math.floor(intervalSeconds / 60)}m ${intervalSeconds % 60}s`}
+            </span>
+          </div>
+          <Slider
+            min={10}
+            max={300}
+            step={5}
+            value={[intervalSeconds]}
+            onValueChange={(v) => onChangeInterval(v[0])}
+            className="py-2"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>10s</span>
+            <span>5m</span>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          With anti-detection jitter:{" "}
-          {Math.floor(intervalSeconds * 0.7)}-{Math.floor(intervalSeconds * 1.3)}s actual
-        </p>
-      </div>
 
-      {/* Start/Stop button */}
-      <div className="pt-2">
-        {isRunning ? (
-          <button
-            onClick={handleStop}
-            disabled={stopMutation.isPending}
-            className="w-full bg-red-500 text-white font-semibold py-3 rounded-lg hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {stopMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Stopping...
-              </>
-            ) : (
-              <>
-                <Power className="h-4 w-4" />
-                Stop Bumping
-              </>
-            )}
-          </button>
-        ) : (
-          <button
-            onClick={handleStart}
-            disabled={!tokenValid || startMutation.isPending}
-            className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {startMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Starting...
-              </>
-            ) : (
-              <>
-                <Settings className="h-4 w-4" />
-                Start Bumping
-              </>
-            )}
-          </button>
-        )}
-
-        {(startMutation.error || stopMutation.error) && (
-          <p className="text-xs text-red-500 mt-2 text-center">
-            {(startMutation.error || stopMutation.error)?.message}
+        {/* Estimate */}
+        <div className="pt-3 border-t border-border">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Zap className="h-3 w-3" />
+              Hourly volume
+            </span>
+            <span className="font-mono font-semibold">
+              ${(parseFloat(buyAmountUsd) * 10 * (3600 / intervalSeconds)).toFixed(2)}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            10 wallets × {buyAmountUsd} × ~{Math.floor(3600 / intervalSeconds)} cycles/hr
           </p>
-        )}
+        </div>
       </div>
-    </div>
+    </Card>
   )
 }

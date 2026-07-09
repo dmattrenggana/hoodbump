@@ -1,177 +1,156 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { usePrivy } from "@privy-io/react-auth"
-import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
-import { useBotWallets, useCreateBotWallets } from "@/hooks/use-bot-wallets"
-import { Wallet, Plus, Loader2, AlertCircle } from "lucide-react"
-import { formatAddress } from "@/lib/format"
-import { formatEther } from "viem"
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Plus, Loader2, RefreshCw, Wallet } from "lucide-react"
+import { toast } from "sonner"
+import { formatAddress, formatEth } from "@/lib/format"
+import { WALLETS_PER_USER } from "@/lib/constants"
 
-export function ManageBot() {
-  const { ready, authenticated } = usePrivy()
-  const userAddress = useSmartWalletAddress()
-  const [mounted, setMounted] = useState(false)
+interface BotWallet {
+  id: string
+  address: string
+  walletIndex: number
+  ethBalanceWei: string
+  wethBalanceWei: string
+  lastSwapAt: string | null
+}
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+interface ManageBotProps {
+  userAddress: string | null
+}
 
-  const {
-    data: botWallets,
-    isLoading,
-    error,
-    refetch,
-  } = useBotWallets(mounted && authenticated ? userAddress : null)
+export function ManageBot({ userAddress }: ManageBotProps) {
+  const queryClient = useQueryClient()
 
-  const createMutation = useCreateBotWallets(userAddress)
+  const { data: wallets, isLoading, refetch } = useQuery({
+    queryKey: ["bot-wallets", userAddress],
+    queryFn: async (): Promise<BotWallet[]> => {
+      if (!userAddress) return []
+      const res = await fetch(`/api/bot/get-or-create-wallets?userAddress=${userAddress}`)
+      if (!res.ok) throw new Error("Failed to fetch")
+      const data = await res.json()
+      return data.wallets || []
+    },
+    enabled: !!userAddress,
+    refetchInterval: 30_000,
+  })
 
-  if (!mounted) return null
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/bot/get-or-create-wallets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAddress }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || "Failed")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bot-wallets", userAddress] })
+      toast.success(`${WALLETS_PER_USER} bot wallets created`)
+    },
+    onError: (err: any) => toast.error(err.message),
+  })
 
-  if (!ready) {
-    return (
-      <div className="border border-border rounded-lg bg-card p-6 text-center">
-        <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-2">Loading...</p>
-      </div>
-    )
-  }
-
-  if (!authenticated) {
-    return (
-      <div className="border border-border rounded-lg bg-card p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Connect your wallet to view bot wallets
-        </p>
-      </div>
-    )
-  }
+  if (!userAddress) return null
 
   if (isLoading) {
     return (
-      <div className="border border-border rounded-lg bg-card p-6 text-center">
+      <Card className="bg-card border-border p-8 text-center">
         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-2">
-          Loading bot wallets...
-        </p>
-      </div>
+        <p className="text-xs text-muted-foreground mt-2">Loading...</p>
+      </Card>
     )
   }
 
-  if (error) {
-    return (
-      <div className="border border-red-500/30 rounded-lg bg-card p-6">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-red-500">
-              Failed to load wallets
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {error.message}
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const hasWallets = botWallets && botWallets.length > 0
+  const hasWallets = wallets && wallets.length > 0
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="border border-border rounded-lg bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold">Bot Wallets</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              {hasWallets
-                ? `${botWallets.length} wallets ready for swap execution`
-                : "No bot wallets yet"}
-            </p>
+    <Card className="bg-card border-border">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs text-muted-foreground">BOT WALLETS</span>
           </div>
           {hasWallets && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => refetch()}
-              className="text-xs text-primary hover:underline"
+              className="h-7 text-xs"
             >
+              <RefreshCw className="h-3 w-3 mr-1" />
               Refresh
-            </button>
+            </Button>
           )}
         </div>
-      </div>
 
-      {/* Create wallets CTA */}
-      {!hasWallets && (
-        <div className="border border-border rounded-lg bg-card p-6 text-center">
-          <Wallet className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-          <h3 className="text-base font-semibold mb-2">Create Bot Wallets</h3>
-          <p className="text-xs text-muted-foreground mb-4">
-            Generate 10 encrypted wallets for automated swap execution
-          </p>
-          <button
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg font-semibold text-sm hover:opacity-90 transition disabled:opacity-50"
-          >
-            {createMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 inline mr-2" />
-                Create 10 Wallets
-              </>
-            )}
-          </button>
-          {createMutation.error && (
-            <p className="text-xs text-red-500 mt-3">
-              {createMutation.error.message}
+        {!hasWallets ? (
+          <div className="text-center py-6">
+            <Wallet className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-semibold mb-1">No bot wallets</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Create {WALLETS_PER_USER} encrypted wallets for swap execution
             </p>
-          )}
-        </div>
-      )}
-
-      {/* Wallet list */}
-      {hasWallets && (
-        <div className="space-y-2">
-          {botWallets.map((wallet) => (
-            <div
-              key={wallet.id}
-              className="border border-border rounded-lg bg-card p-3"
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={createMutation.isPending}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-primary">
-                      Wallet #{wallet.walletIndex + 1}
-                    </span>
-                    {wallet.lastSwapAt && (
-                      <span className="text-xs text-muted-foreground">
-                        · last swap {new Date(wallet.lastSwapAt).toLocaleTimeString()}
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create {WALLETS_PER_USER} Wallets
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {wallets.map((w) => (
+              <div
+                key={w.id}
+                className="p-2.5 bg-background border border-border rounded-md"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold text-primary">
+                        Wallet #{w.walletIndex + 1}
                       </span>
-                    )}
+                      {w.lastSwapAt && (
+                        <span className="text-xs text-muted-foreground">
+                          · last {new Date(w.lastSwapAt).toLocaleTimeString()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {formatAddress(w.address, 4)}
+                    </p>
                   </div>
-                  <p className="text-xs font-mono text-muted-foreground break-all">
-                    {formatAddress(wallet.address, 4)}
-                  </p>
-                </div>
-                <div className="text-right ml-3">
-                  <p className="text-xs font-mono">
-                    {formatEther(BigInt(wallet.ethBalanceWei), 4)} ETH
-                  </p>
-                  <p className="text-xs font-mono text-muted-foreground">
-                    {formatEther(BigInt(wallet.wethBalanceWei), 4)} WETH
-                  </p>
+                  <div className="text-right ml-3">
+                    <p className="text-xs font-mono">
+                      {formatEth(BigInt(w.ethBalanceWei || "0"))} ETH
+                    </p>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {formatEth(BigInt(w.wethBalanceWei || "0"))} WETH
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }

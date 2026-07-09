@@ -1,41 +1,36 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
+import { JetBrains_Mono } from "next/font/google"
 import { Providers } from "./providers"
 import { Toaster } from "sonner"
 import "./globals.css"
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://hoodbump.xyz"
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+})
+
 export const metadata: Metadata = {
   title: "HoodBump - Trending Bot for Robinhood Chain",
-  description: "Automated trending bot for Robinhood Chain tokens. Bump your token's volume with 10 encrypted bot wallets.",
-  keywords: ["Robinhood Chain", "trending bot", "volume bot", "HoodBump", "Web3", "DeFi"],
-  authors: [{ name: "HoodBump" }],
-  creator: "HoodBump",
-  openGraph: {
-    title: "HoodBump - Trending Bot for Robinhood Chain",
-    description: "Bump your token's volume with automated swaps on Robinhood Chain",
-    type: "website",
-    images: [
-      {
-        url: "/og-image.svg",
-        width: 1200,
-        height: 630,
-        alt: "HoodBump - Trending Bot for Robinhood Chain",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "HoodBump - Trending Bot for Robinhood Chain",
-    description: "Bump your token's volume with automated swaps on Robinhood Chain",
-    images: ["/og-image.svg"],
-  },
+  description: "Professional Bump Bot for Robinhood Chain. Bump your token's volume with 10 encrypted bot wallets.",
+  generator: "HoodBump",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/logo.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/logo.svg", type: "image/svg+xml" },
     ],
     apple: "/logo.svg",
   },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#000000",
 }
 
 export default function RootLayout({
@@ -45,7 +40,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="font-mono antialiased">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="HoodBump" />
+      </head>
+      <body className={`${jetbrainsMono.variable} font-mono antialiased bg-background text-foreground min-h-screen`}>
         <Providers>
           {children}
           <Toaster position="top-center" richColors theme="dark" />

@@ -1,36 +1,83 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { usePrivy } from "@privy-io/react-auth"
-import { useChainId } from "wagmi"
-import { Wallet, LogOut, Zap, Loader2 } from "lucide-react"
-import { formatEth } from "@/lib/format"
-import { RH_WETH_ADDRESS } from "@/lib/constants"
-import { robinhoodChain } from "@/lib/chain-config"
-import { ManageBot } from "@/components/manage-bot"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Loader2, Wallet } from "lucide-react"
+import { usePrivy, useWallets } from "@privy-io/react-auth"
+import { useSmartWallets } from "@privy-io/react-auth/smart-wallets"
+import { useAccount, useChainId } from "wagmi"
+import { WalletCard } from "@/components/wallet-card"
+import { TokenInput } from "@/components/token-input"
 import { ConfigPanel } from "@/components/config-panel"
-import { ActivityFeed } from "@/components/activity-feed"
-import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
+import { ActionButton } from "@/components/action-button"
+import { BotLiveActivity } from "@/components/bot-live-activity"
+import { ManageBot } from "@/components/manage-bot"
 import { useUserBalances } from "@/hooks/use-token-balance"
+import { useBotSession } from "@/hooks/use-bot-session"
+import { useEthPrice } from "@/hooks/use-eth-price"
+import { toast } from "sonner"
+import Image from "next/image"
 
-export default function Home() {
-  const { ready, authenticated, login, logout, user } = usePrivy()
+export default function HoodBumpDashboard() {
+  const { ready: privyReady, authenticated, login, logout, user } = usePrivy()
+  const { wallets } = useWallets()
+  const { client: smartWalletClient } = useSmartWallets()
+  const { address } = useAccount()
   const chainId = useChainId()
-  const [mounted, setMounted] = useState(false)
+
+  const [smartWalletAddress, setSmartWalletAddress] = useState<string | null>(null)
+  const [targetToken, setTargetToken] = useState<string | null>(null)
+  const [isTokenVerified, setIsTokenVerified] = useState(false)
+  const [buyAmountUsd, setBuyAmountUsd] = useState("0.01")
+  const [intervalSeconds, setIntervalSeconds] = useState(60)
+  const [isMounted, setIsMounted] = useState(false)
+  const [activeTab, setActiveTab] = useState("control")
+
+  const { eth, weth, refetch: refetchBalances } = useUserBalances(smartWalletAddress)
+  const { session, startSession, stopSession, isStarting, isStopping } = useBotSession(smartWalletAddress)
+  const { price: ethPrice } = useEthPrice()
+
+  const isActive = session?.status === "running"
 
   useEffect(() => {
-    setMounted(true)
+    setIsMounted(true)
   }, [])
 
-  // Smart wallet address (Privy AA)
-  const smartWalletAddress = useSmartWalletAddress()
+  // Sync smart wallet address
+  useEffect(() => {
+    const sw = wallets.find((w) => (w as any).type === "smart_wallet" || w.walletClientType === "smart_wallet")
+    setSmartWalletAddress(smartWalletClient?.account?.address || sw?.address || address || null)
+  }, [wallets, smartWalletClient, address])
 
-  // Balances (native ETH + WETH)
-  const { eth, token: weth, isLoading: isLoadingBalances } = useUserBalances(
-    RH_WETH_ADDRESS
-  )
+  const handleStart = async () => {
+    if (!targetToken) {
+      toast.error("Enter a token address first")
+      return
+    }
+    try {
+      await startSession({
+        tokenAddress: targetToken,
+        amountUsd: buyAmountUsd,
+        intervalSeconds,
+      })
+      toast.success("Bot started")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start bot")
+    }
+  }
 
-  if (!mounted) {
+  const handleStop = async () => {
+    try {
+      await stopSession()
+      toast.success("Bot stopped")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to stop bot")
+    }
+  }
+
+  if (!isMounted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -41,184 +88,131 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 max-w-2xl mx-auto">
       {/* Header */}
-      <header className="border border-border rounded-lg bg-card p-6 mb-4">
+      <header className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
+            <Image
               src="/logo.svg"
               alt="HoodBump"
-              className="h-12 w-12 rounded-lg"
+              width={48}
+              height={48}
+              className="rounded-lg"
+              priority
             />
             <div>
-              <h1 className="text-xl font-bold">HoodBump</h1>
+              <h1 className="text-xl font-bold tracking-tight">HoodBump</h1>
               <p className="text-xs text-muted-foreground">
-                Trending Bot for Robinhood Chain
+                Robinhood Chain · v0.1.0
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div
               className={`h-2 w-2 rounded-full ${
-                authenticated
-                  ? "bg-primary animate-pulse"
-                  : "bg-muted-foreground"
+                authenticated ? "bg-primary animate-pulse" : "bg-muted-foreground"
               }`}
             />
             <span className="text-xs text-muted-foreground">
-              {authenticated ? "Connected" : "Disconnected"}
+              {authenticated ? "Connected" : "Offline"}
             </span>
           </div>
         </div>
       </header>
 
-      {/* Network status */}
-      <div className="border border-border rounded-lg bg-card p-4 mb-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Network</span>
-          <div className="flex items-center gap-2">
-            <span className="font-mono">Robinhood Chain</span>
-            {chainId === robinhoodChain.id ? (
-              <span className="text-xs text-primary">✓</span>
-            ) : (
-              <span className="text-xs text-yellow-500">⚠</span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center justify-between text-sm mt-2">
-          <span className="text-muted-foreground">Chain ID</span>
-          <span className="font-mono">{chainId || "—"}</span>
-        </div>
-      </div>
-
-      {/* Main content */}
-      {!ready ? (
-        <div className="border border-border rounded-lg bg-card p-8 text-center">
+      {!privyReady ? (
+        <Card className="bg-card border-border p-8 text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">Loading Privy...</p>
-        </div>
+        </Card>
       ) : !authenticated ? (
-        <div className="border border-border rounded-lg bg-card p-8 text-center">
+        <Card className="bg-card border-border p-8 text-center">
           <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-lg font-semibold mb-2">Connect Your Wallet</h2>
           <p className="text-sm text-muted-foreground mb-6">
             Sign in to start bumping tokens on Robinhood Chain
           </p>
-          <button
+          <Button
             onClick={login}
-            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+            size="lg"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground px-8"
           >
             Connect Wallet
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
-        <>
-          {/* Smart Wallet Info */}
-          <div className="border border-border rounded-lg bg-card p-6 mb-4">
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-              SMART WALLET (AA)
-            </h2>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Address</p>
-                <p className="font-mono text-sm break-all">
-                  {smartWalletAddress || "—"}
-                </p>
-              </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4 bg-card border border-border">
+            <TabsTrigger value="control" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Control
+            </TabsTrigger>
+            <TabsTrigger value="manage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Manage Bot
+            </TabsTrigger>
+          </TabsList>
 
-              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    ETH (gas)
-                  </p>
-                  <p className="font-mono text-sm">
-                    {isLoadingBalances ? (
-                      <Loader2 className="h-3 w-3 animate-spin inline" />
-                    ) : eth ? (
-                      formatEth(eth.value)
-                    ) : (
-                      "0"
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">WETH</p>
-                  <p className="font-mono text-sm">
-                    {isLoadingBalances ? (
-                      <Loader2 className="h-3 w-3 animate-spin inline" />
-                    ) : weth ? (
-                      formatEth(weth.value)
-                    ) : (
-                      "0"
-                    )}
-                  </p>
-                </div>
-              </div>
+          {/* CONTROL TAB */}
+          <TabsContent value="control" className="space-y-4">
+            {/* Smart Wallet */}
+            <WalletCard
+              smartWalletAddress={smartWalletAddress}
+              ethBalance={eth?.formatted}
+              wethBalance={weth?.formatted}
+              ethPriceUsd={ethPrice}
+              onRefresh={refetchBalances}
+              onDisconnect={logout}
+            />
+
+            {/* Token Input */}
+            <TokenInput
+              value={targetToken}
+              onChange={(addr) => {
+                setTargetToken(addr)
+                setIsTokenVerified(false)
+              }}
+              onVerified={() => setIsTokenVerified(true)}
+            />
+
+            {/* Config Panel */}
+            <ConfigPanel
+              buyAmountUsd={buyAmountUsd}
+              onChangeAmount={setBuyAmountUsd}
+              intervalSeconds={intervalSeconds}
+              onChangeInterval={setIntervalSeconds}
+              ethPriceUsd={ethPrice}
+            />
+
+            {/* Action Button */}
+            <ActionButton
+              isActive={isActive}
+              onToggle={isActive ? handleStop : handleStart}
+              isVerified={isTokenVerified}
+              loadingState={
+                isStarting
+                  ? "Starting..."
+                  : isStopping
+                    ? "Stopping..."
+                    : null
+              }
+              buyAmountUsd={buyAmountUsd}
+              balanceWei={eth?.value?.toString()}
+            />
+
+            {/* Live Activity */}
+            <BotLiveActivity userAddress={smartWalletAddress} />
+
+            {/* Footer info */}
+            <div className="text-center text-xs text-muted-foreground pt-4">
+              <p>HoodBump · 1% affiliate fee · bot wallets pay own gas</p>
+              <p className="mt-1">Built for Robinhood Chain (chain ID 4663)</p>
             </div>
-          </div>
+          </TabsContent>
 
-          {/* Bot Wallets Section */}
-          <div className="mb-4">
-            <ManageBot />
-          </div>
-
-          {/* Config Panel */}
-          <div className="mb-4">
-            <ConfigPanel />
-          </div>
-
-          {/* Activity Feed */}
-          <div className="mb-4">
-            <ActivityFeed />
-          </div>
-
-          {/* Phase indicator */}
-          <div className="border border-border rounded-lg bg-card p-4 mb-4">
-            <h3 className="text-xs font-semibold text-muted-foreground mb-3">
-              ROADMAP
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-primary">✓</span>
-                <span>Phase 1: Foundation</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-primary">✓</span>
-                <span>Phase 2: Bot Wallets (current)</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>○</span>
-                <span>Phase 3: Swap Execution (0x API)</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>○</span>
-                <span>Phase 4: Bot Automation (worker loop)</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>○</span>
-                <span>Phase 5: Polish & Branding</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>○</span>
-                <span>Phase 6: Deploy & Test</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Logout */}
-          <button
-            onClick={logout}
-            className="w-full border border-border rounded-lg bg-card p-3 text-sm text-muted-foreground hover:text-foreground transition flex items-center justify-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Disconnect
-          </button>
-        </>
+          {/* MANAGE BOT TAB */}
+          <TabsContent value="manage" className="space-y-4">
+            <ManageBot userAddress={smartWalletAddress} />
+          </TabsContent>
+        </Tabs>
       )}
-
-      {/* Footer */}
-      <footer className="text-center text-xs text-muted-foreground mt-6">
-        HoodBump v0.1.0 · Robinhood Chain · Phase 2
-      </footer>
     </main>
   )
 }

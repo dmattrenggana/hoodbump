@@ -18,26 +18,23 @@ export interface BotSession {
 }
 
 export function useBotSession(userAddress: string | null) {
-  return useQuery({
+  const queryClient = useQueryClient()
+
+  const sessionQuery = useQuery({
     queryKey: ["bot-session", userAddress],
     queryFn: async (): Promise<BotSession | null> => {
       if (!userAddress) return null
       const res = await fetch(`/api/bot/session?userAddress=${userAddress}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || "Failed to fetch session")
-      }
+      if (res.status === 404) return null
+      if (!res.ok) throw new Error("Failed to fetch session")
       const data = await res.json()
       return data.session
     },
     enabled: !!userAddress,
-    refetchInterval: 10_000, // Refresh every 10s
+    refetchInterval: 10_000,
   })
-}
 
-export function useStartSession(userAddress: string | null) {
-  const queryClient = useQueryClient()
-  return useMutation({
+  const startMutation = useMutation({
     mutationFn: async (params: {
       tokenAddress: Address
       amountUsd: string
@@ -47,10 +44,7 @@ export function useStartSession(userAddress: string | null) {
       const res = await fetch("/api/bot/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userAddress,
-          ...params,
-        }),
+        body: JSON.stringify({ userAddress, ...params }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -62,11 +56,8 @@ export function useStartSession(userAddress: string | null) {
       queryClient.invalidateQueries({ queryKey: ["bot-session", userAddress] })
     },
   })
-}
 
-export function useStopSession(userAddress: string | null) {
-  const queryClient = useQueryClient()
-  return useMutation({
+  const stopMutation = useMutation({
     mutationFn: async () => {
       if (!userAddress) throw new Error("userAddress required")
       const res = await fetch(
@@ -83,4 +74,13 @@ export function useStopSession(userAddress: string | null) {
       queryClient.invalidateQueries({ queryKey: ["bot-session", userAddress] })
     },
   })
+
+  return {
+    session: sessionQuery.data,
+    isLoading: sessionQuery.isLoading,
+    startSession: startMutation.mutateAsync,
+    stopSession: stopMutation.mutateAsync,
+    isStarting: startMutation.isPending,
+    isStopping: stopMutation.isPending,
+  }
 }
