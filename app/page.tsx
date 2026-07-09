@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, Wallet } from "lucide-react"
 import { usePrivy, useWallets } from "@privy-io/react-auth"
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets"
 import { useAccount, useChainId } from "wagmi"
 import { WalletCard } from "@/components/wallet-card"
 import { TokenInput } from "@/components/token-input"
@@ -23,11 +22,10 @@ import Image from "next/image"
 export default function HoodBumpDashboard() {
   const { ready: privyReady, authenticated, login, logout, user } = usePrivy()
   const { wallets } = useWallets()
-  const { client: smartWalletClient } = useSmartWallets()
   const { address } = useAccount()
   const chainId = useChainId()
 
-  const [smartWalletAddress, setSmartWalletAddress] = useState<string | null>(null)
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null)
   const [targetToken, setTargetToken] = useState<string | null>(null)
   const [isTokenVerified, setIsTokenVerified] = useState(false)
   const [buyAmountUsd, setBuyAmountUsd] = useState("0.01")
@@ -35,8 +33,8 @@ export default function HoodBumpDashboard() {
   const [isMounted, setIsMounted] = useState(false)
   const [activeTab, setActiveTab] = useState("control")
 
-  const { eth, weth, refetch: refetchBalances } = useUserBalances(smartWalletAddress)
-  const { session, startSession, stopSession, isStarting, isStopping } = useBotSession(smartWalletAddress)
+  const { eth, weth, refetch: refetchBalances } = useUserBalances(connectedAddress)
+  const { session, startSession, stopSession, isStarting, isStopping } = useBotSession(connectedAddress)
   const { price: ethPrice } = useEthPrice()
 
   const isActive = session?.status === "running"
@@ -45,11 +43,14 @@ export default function HoodBumpDashboard() {
     setIsMounted(true)
   }, [])
 
-  // Sync smart wallet address
+  // Sync connected wallet address from any Privy wallet or wagmi
   useEffect(() => {
-    const sw = wallets.find((w) => (w as any).type === "smart_wallet" || w.walletClientType === "smart_wallet")
-    setSmartWalletAddress(smartWalletClient?.account?.address || sw?.address || address || null)
-  }, [wallets, smartWalletClient, address])
+    // Pick the first wallet we can find
+    const privyWallet = wallets.find((w) => w.address)?.address
+    const external = address
+    const final = privyWallet || external || null
+    setConnectedAddress(final)
+  }, [wallets, address])
 
   const handleStart = async () => {
     if (!targetToken) {
@@ -58,7 +59,7 @@ export default function HoodBumpDashboard() {
     }
     try {
       await startSession({
-        tokenAddress: targetToken,
+        tokenAddress: targetToken as `0x${string}`,
         amountUsd: buyAmountUsd,
         intervalSeconds,
       })
@@ -142,19 +143,24 @@ export default function HoodBumpDashboard() {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4 bg-card border border-border">
-            <TabsTrigger value="control" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <TabsTrigger
+              value="control"
+              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               Control
             </TabsTrigger>
-            <TabsTrigger value="manage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <TabsTrigger
+              value="manage"
+              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
               Manage Bot
             </TabsTrigger>
           </TabsList>
 
           {/* CONTROL TAB */}
           <TabsContent value="control" className="space-y-4">
-            {/* Smart Wallet */}
             <WalletCard
-              smartWalletAddress={smartWalletAddress}
+              smartWalletAddress={connectedAddress}
               ethBalance={eth?.formatted}
               wethBalance={weth?.formatted}
               ethPriceUsd={ethPrice}
@@ -162,7 +168,6 @@ export default function HoodBumpDashboard() {
               onDisconnect={logout}
             />
 
-            {/* Token Input */}
             <TokenInput
               value={targetToken}
               onChange={(addr) => {
@@ -172,7 +177,6 @@ export default function HoodBumpDashboard() {
               onVerified={() => setIsTokenVerified(true)}
             />
 
-            {/* Config Panel */}
             <ConfigPanel
               buyAmountUsd={buyAmountUsd}
               onChangeAmount={setBuyAmountUsd}
@@ -181,26 +185,19 @@ export default function HoodBumpDashboard() {
               ethPriceUsd={ethPrice}
             />
 
-            {/* Action Button */}
             <ActionButton
               isActive={isActive}
               onToggle={isActive ? handleStop : handleStart}
               isVerified={isTokenVerified}
               loadingState={
-                isStarting
-                  ? "Starting..."
-                  : isStopping
-                    ? "Stopping..."
-                    : null
+                isStarting ? "Starting..." : isStopping ? "Stopping..." : null
               }
               buyAmountUsd={buyAmountUsd}
               balanceWei={eth?.value?.toString()}
             />
 
-            {/* Live Activity */}
-            <BotLiveActivity userAddress={smartWalletAddress} />
+            <BotLiveActivity userAddress={connectedAddress} />
 
-            {/* Footer info */}
             <div className="text-center text-xs text-muted-foreground pt-4">
               <p>HoodBump · 1% affiliate fee · bot wallets pay own gas</p>
               <p className="mt-1">Built for Robinhood Chain (chain ID 4663)</p>
@@ -209,7 +206,7 @@ export default function HoodBumpDashboard() {
 
           {/* MANAGE BOT TAB */}
           <TabsContent value="manage" className="space-y-4">
-            <ManageBot userAddress={smartWalletAddress} />
+            <ManageBot userAddress={connectedAddress} />
           </TabsContent>
         </Tabs>
       )}

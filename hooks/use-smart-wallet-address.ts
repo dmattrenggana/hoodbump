@@ -1,32 +1,31 @@
 "use client"
 
-import { usePrivy, useWallets } from "@privy-io/react-auth"
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets"
+import { useWallets } from "@privy-io/react-auth"
+import { useAccount } from "wagmi"
 import { useMemo } from "react"
-import { type Address } from "viem"
 
 /**
- * Get the user's Privy Smart Wallet (AA) address.
- * 
- * Duplicated logic was in app/page.tsx and components/manage-bot.tsx.
- * Now extracted to a single hook for reuse.
+ * Get the user's main wallet address from Privy or wagmi.
+ * Falls back to the first available wallet address.
+ *
+ * Note: We intentionally DON'T use @privy-io/react-auth/smart-wallets
+ * because that module loads Coinbase Smart Wallet SDK which crashes
+ * on Robinhood Chain (no chain support).
  */
-export function useSmartWalletAddress(): Address | null {
+export function useSmartWalletAddress(): string | null {
   const { wallets } = useWallets()
-  const { client: smartWalletClient } = useSmartWallets()
+  const { address } = useAccount()
 
   return useMemo(() => {
-    if (!smartWalletClient && wallets.length === 0) return null
+    // Priority 1: external wallet from wagmi (MetaMask, WalletConnect, etc.)
+    if (address) return address
 
-    // Priority 1: smart wallet client (Privy AA)
-    if (smartWalletClient?.account?.address) {
-      return smartWalletClient.account.address as Address
-    }
+    // Priority 2: Privy embedded wallet
+    const privyWallet = wallets.find((w) => w.address && w.walletClientType !== "smart_wallet")
+    if (privyWallet?.address) return privyWallet.address
 
-    // Priority 2: find smart wallet type in wallets array
-    const smartWallet = wallets.find(
-      (w) => (w as any).type === "smart_wallet"
-    )
-    return (smartWallet?.address as Address) || null
-  }, [wallets, smartWalletClient])
+    // Priority 3: any wallet (even smart_wallet - just for display)
+    const any = wallets.find((w) => w.address)
+    return any?.address || null
+  }, [wallets, address])
 }

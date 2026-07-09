@@ -21,22 +21,29 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
+    // Apply aliases on BOTH server and client since Privy's main
+    // index.mjs auto-imports these at module load time
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      // Coinbase SDK — auto-imported by @privy-io/react-auth but
+      // Coinbase Smart Wallet doesn't support Robinhood Chain (4663).
+      // Stub it out to prevent crashes on init.
+      '@coinbase/wallet-sdk': false,
+      // WalletConnect — also auto-imported. We use Privy embedded
+      // wallets + wagmi, don't need WC provider here.
+      '@walletconnect/ethereum-provider': false,
+    }
+
     if (!isServer) {
-      // Alias optional peer deps to false (we don't use these features)
-      // These come from Privy + wagmi/connectors optional chains
+      // Client-only aliases
       config.resolve.alias = {
         ...config.resolve.alias,
-        // Tempo chain (we use Robinhood)
+        // Optional peer deps we don't use
         accounts: false,
-        // Stripe crypto payments
         '@stripe/crypto': false,
-        // Farcaster mini app (Solana)
         '@farcaster/mini-app-solana': false,
-        // MetaMask specific EVM connector
         '@metamask/connect-evm': false,
-        // Abstract chain
         '@abstract-foundation/agw-client': false,
-        // Base account
         '@base-org/account': false,
       }
     }
