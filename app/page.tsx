@@ -216,9 +216,6 @@ export default function HoodBumpDashboard() {
           </TabsContent>
         </Tabs>
       )}
-
-      {/* TEMPORARY DEBUG - shows wallet state to diagnose re-login bug */}
-      {authenticated && <DebugWalletState />}
     </main>
   )
 }
