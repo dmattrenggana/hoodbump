@@ -287,6 +287,7 @@ async function processUserCycle(state: {
       }
     )
     console.log(`   🔗 Swap tx: ${swapHash}`)
+    console.log(`   🔗 Explorer: https://robinhoodchain.blockscout.com/tx/${swapHash}`)
 
     // 10. Wait for confirmation
     const receipt = await publicClient.waitForTransactionReceipt({
@@ -434,6 +435,7 @@ async function startWorker() {
   console.log(`🔗 Chain: Robinhood (${process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL?.slice(0, 40)}...)`)
   console.log(`💰 Swap provider: 0x (1% affiliate fee)`)
   console.log(`🎭 Anti-detection: ${MIN_INTERVAL_SECONDS}s min, ±30% jitter, 8% skip`)
+  console.log(`📦 Build: ${process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || "local"} @ ${new Date().toISOString()}`)
   console.log("=================================================\n")
 
   // Initial poll
