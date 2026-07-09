@@ -274,8 +274,9 @@ async function processUserCycle(state: {
       console.log(`   ✅ Existing allowance sufficient`)
     }
 
-    // 9. Execute swap
-    console.log(`   📤 Sending swap tx...`)
+    // 9. Execute swap (with 20% gas buffer for safety)
+    const swapGas = (txParams.gasLimit * 120n) / 100n
+    console.log(`   📤 Sending swap tx (gas=${swapGas})...`)
     const swapHash = await signAndSendTransaction(
       userAddress,
       walletIndex,
@@ -283,7 +284,7 @@ async function processUserCycle(state: {
         to: txParams.to,
         data: txParams.data,
         value: txParams.value,
-        gas: txParams.gasLimit,
+        gas: swapGas,
       }
     )
     console.log(`   🔗 Swap tx: ${swapHash}`)
