@@ -14,5 +14,5 @@ export function formatAddress(
 export function formatEth(wei: bigint | string, decimals: number = 4): string {
   const value = typeof wei === "string" ? BigInt(wei) : wei
   const eth = Number(value) / 1e18
-  return `${eth.toFixed(decimals)} ETH`
+  return eth.toFixed(decimals)
 }
