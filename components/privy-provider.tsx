@@ -1,7 +1,6 @@
 "use client"
 
 import { PrivyProvider as PrivyProviderBase } from "@privy-io/react-auth"
-import { SmartWalletsProvider } from "@privy-io/react-auth/smart-wallets"
 import { WagmiProvider } from "@privy-io/wagmi"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { http, createConfig } from "wagmi"
@@ -25,8 +24,7 @@ const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID
 
 if (!PRIVY_APP_ID) {
   throw new Error(
-    "NEXT_PUBLIC_PRIVY_APP_ID environment variable is required. " +
-      "Get one at https://dashboard.privy.io"
+    "NEXT_PUBLIC_PRIVY_APP_ID environment variable is required. Get one at https://dashboard.privy.io"
   )
 }
 
@@ -38,23 +36,22 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
   return (
     <PrivyProviderBase
       appId={PRIVY_APP_ID}
-
       config={{
         loginMethods: ["wallet"],
         appearance: {
           theme: "dark",
-          accentColor: "#00ff00", // HoodBump neon green
+          accentColor: "#00ff00",
           logo: "/icon.png",
         },
+        // Embedded wallets (regular EOAs) - still works for email/social users
         embeddedWallets: {
           ethereum: {
             createOnLogin: "all-users",
           },
         },
-        // Smart wallets disabled — Coinbase Smart Wallet doesn't support
-        // Robinhood Chain (chain ID 4663) and crashes on init.
-        // HoodBump bots use EOA wallets anyway, so we don't need AA for main wallet.
-        // Users can still connect external wallets (MetaMask, WalletConnect) or use embedded wallets.
+        // Smart wallets DISABLED ENTIRELY
+        // Coinbase Smart Wallet doesn't support Robinhood Chain (4663)
+        // and crashes on init. HoodBump doesn't need AA - bot uses EOA wallets.
         smartWallets: {
           enabled: false,
           createOnLogin: "off",
@@ -64,9 +61,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
       } as any}
     >
       <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={wagmiConfig}>
-          <SmartWalletsProvider>{children}</SmartWalletsProvider>
-        </WagmiProvider>
+        <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
       </QueryClientProvider>
     </PrivyProviderBase>
   )
