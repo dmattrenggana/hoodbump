@@ -201,3 +201,205 @@ export function formatZeroXError(error: any): string {
   }
   return message
 }
+
+/**
+ * High-level swap execution for a bot wallet.
+ *
+ * Handles the full flow:
+ *   1. Check WETH balance
+ *   2. Get 0x v2 quote (AllowanceHolder)
+ *   3. Approve WETH → AllowanceHolder if needed (MAX_UINT256, one-time per wallet)
+ *   4. Send swap tx with 20% gas buffer
+ *   5. Wait for confirmation
+ *
+ * Returns structured result for API endpoints + workers.
+ */
+export async function executeBotSwap(params: {
+  userAddress: string
+  walletIndex: number
+  sellToken: Address
+  buyToken: Address
+  sellAmount: bigint
+}): Promise<{
+  success: boolean
+  approveHash?: import("viem").Hex
+  swapHash?: import("viem").Hex
+  buyAmount?: bigint
+  error?: string
+  steps: Array<{ step: string; status: "ok" | "fail" | "info"; detail?: string }>
+}> {
+  const { userAddress, walletIndex, sellToken, buyToken, sellAmount } = params
+  const steps: Array<{ step: string; status: "ok" | "fail" | "info"; detail?: string }> = []
+
+  try {
+    const { signAndSendTransaction, getBotWalletByIndex, getPublicClient } = await import("./bot-wallet")
+    const { encodeFunctionData } = await import("viem")
+    const { RH_WETH_ADDRESS } = await import("./constants")
+
+    steps.push({ step: "load_wallet", status: "info", detail: `Fetching wallet ${walletIndex}` })
+    const wallet = await getBotWalletByIndex(userAddress, walletIndex)
+    if (!wallet) {
+      return { success: false, error: `Bot wallet ${walletIndex} not found`, steps }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Wallet ${wallet.address}`
+
+    const publicClient = getPublicClient()
+
+    // Check WETH balance
+    steps.push({ step: "check_balance", status: "info", detail: `Reading WETH balance` })
+    const wethBalance = (await publicClient.readContract({
+      address: RH_WETH_ADDRESS,
+      abi: [
+        {
+          inputs: [{ name: "account", type: "address" }],
+          name: "balanceOf",
+          outputs: [{ name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+      ],
+      functionName: "balanceOf",
+      args: [wallet.address as `0x${string}`],
+    })) as bigint
+
+    if (wethBalance < sellAmount) {
+      steps[steps.length - 1].status = "fail"
+      steps[steps.length - 1].detail = `Insufficient WETH: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`
+      return {
+        success: false,
+        error: `Insufficient WETH in wallet ${walletIndex}: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`,
+        steps,
+      }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `WETH: ${(Number(wethBalance) / 1e18).toFixed(6)}`
+
+    // Get quote
+    steps.push({ step: "get_quote", status: "info", detail: `Calling 0x v2 quote API` })
+    const quote = await getZeroXQuote({
+      sellToken,
+      buyToken,
+      sellAmount,
+      takerAddress: wallet.address as `0x${string}`,
+    })
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `buyAmount=${(Number(quote.buyAmount) / 1e18).toFixed(6)} gas=${quote.gas}`
+    if (quote.issues?.simulationIncomplete) {
+      steps.push({ step: "simulation_warning", status: "info", detail: `0x simulation incomplete — swap may revert` })
+    }
+
+    // Approve if needed
+    const txParams = buildSwapFromQuote(quote)
+    const allowanceTarget = txParams.allowanceTarget
+    steps.push({ step: "check_allowance", status: "info", detail: `Reading allowance → ${allowanceTarget.slice(0, 10)}...` })
+    const currentAllowance = (await publicClient.readContract({
+      address: RH_WETH_ADDRESS,
+      abi: [
+        {
+          name: "allowance",
+          type: "function",
+          stateMutability: "view",
+          inputs: [
+            { name: "owner", type: "address" },
+            { name: "spender", type: "address" },
+          ],
+          outputs: [{ name: "", type: "uint256" }],
+        },
+      ],
+      functionName: "allowance",
+      args: [wallet.address as `0x${string}`, allowanceTarget],
+    })) as bigint
+
+    if (currentAllowance < sellAmount) {
+      steps[steps.length - 1].status = "ok"
+      steps[steps.length - 1].detail = `Current: ${(Number(currentAllowance) / 1e18).toFixed(6)}, need ${(Number(sellAmount) / 1e18).toFixed(6)} — approving`
+
+      steps.push({ step: "approve", status: "info", detail: `Sending approve tx (MAX_UINT256)` })
+      const MAX_UINT256 = (1n << 256n) - 1n
+      const approveHash = await signAndSendTransaction(userAddress, walletIndex, {
+        to: RH_WETH_ADDRESS,
+        data: encodeFunctionData({
+          abi: [
+            {
+              name: "approve",
+              type: "function",
+              stateMutability: "nonpayable",
+              inputs: [
+                { name: "spender", type: "address" },
+                { name: "amount", type: "uint256" },
+              ],
+              outputs: [{ name: "", type: "bool" }],
+            },
+          ],
+          functionName: "approve",
+          args: [allowanceTarget, MAX_UINT256],
+        }),
+        value: 0n,
+        gas: 60000n,
+      })
+      const approveReceipt = await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1,
+      })
+      if (approveReceipt.status !== "success") {
+        steps[steps.length - 1].status = "fail"
+        steps[steps.length - 1].detail = `Approve reverted (block ${approveReceipt.blockNumber})`
+        return { success: false, approveHash, error: "Approve reverted", steps }
+      }
+      steps[steps.length - 1].status = "ok"
+      steps[steps.length - 1].detail = `Block ${approveReceipt.blockNumber}`
+    } else {
+      steps[steps.length - 1].status = "ok"
+      steps[steps.length - 1].detail = `Existing allowance sufficient: ${(Number(currentAllowance) / 1e18).toFixed(6)}`
+    }
+
+    // Execute swap
+    const swapGas = (txParams.gasLimit * 120n) / 100n
+    steps.push({ step: "swap", status: "info", detail: `Sending swap tx (gas=${swapGas})` })
+    const swapHash = await signAndSendTransaction(userAddress, walletIndex, {
+      to: txParams.to,
+      data: txParams.data,
+      value: txParams.value,
+      gas: swapGas,
+    })
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Tx: ${swapHash}`
+
+    // Wait for confirmation
+    steps.push({ step: "confirm", status: "info", detail: `Waiting for confirmation` })
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: swapHash,
+      confirmations: 1,
+    })
+    if (receipt.status !== "success") {
+      steps[steps.length - 1].status = "fail"
+      steps[steps.length - 1].detail = `Swap reverted at block ${receipt.blockNumber}`
+      return {
+        success: false,
+        approveHash: undefined,
+        swapHash,
+        error: `Swap reverted at block ${receipt.blockNumber} (gas used: ${receipt.gasUsed})`,
+        steps,
+      }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Block ${receipt.blockNumber}, gas used ${receipt.gasUsed}`
+
+    return {
+      success: true,
+      swapHash,
+      buyAmount: BigInt(quote.buyAmount),
+      steps,
+    }
+  } catch (error: any) {
+    const lastStep = steps[steps.length - 1]
+    if (lastStep && lastStep.status === "info") {
+      lastStep.status = "fail"
+      lastStep.detail = error.message?.slice(0, 200) || "Unknown error"
+    } else {
+      steps.push({ step: "unknown_error", status: "fail", detail: error.message?.slice(0, 200) })
+    }
+    return { success: false, error: error.message || "Unknown error", steps }
+  }
+}
