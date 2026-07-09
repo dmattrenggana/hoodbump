@@ -176,70 +176,10 @@ async function processUserCycle(state: {
       return { shouldContinue: true }
     }
 
-    // 8. Check + approve allowance if needed
-    const allowanceTarget = quote.allowanceTarget as `0x${string}`
-    const currentAllowance = (await publicClient.readContract({
-      address: RH_WETH_ADDRESS,
-      abi: [
-        {
-          inputs: [
-            { name: "owner", type: "address" },
-            { name: "spender", type: "address" },
-          ],
-          name: "allowance",
-          outputs: [{ name: "", type: "uint256" }],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      functionName: "allowance",
-      args: [currentWallet.address as `0x${string}`, allowanceTarget],
-    })) as bigint
-
-    if (currentAllowance < amountWei) {
-      console.log(`   📝 Approving WETH...`)
-      const approvalData = `0x095ea7b3${allowanceTarget
-        .slice(2)
-        .toLowerCase()
-        .padStart(64, "0")}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff` as `0x${string}`
-
-      try {
-        const approvalHash = await signAndSendTransaction(
-          userAddress,
-          walletIndex,
-          {
-            to: RH_WETH_ADDRESS,
-            data: approvalData,
-            value: BigInt(0),
-          }
-        )
-        console.log(`   ✅ Approval: ${approvalHash}`)
-        await logBotEvent({
-          user_address: userAddress,
-          session_id: session.id,
-          bot_wallet_address: currentWallet.address,
-          action: "approval_granted",
-          status: "success",
-          tx_hash: approvalHash,
-          token_address: RH_WETH_ADDRESS,
-        })
-      } catch (error: any) {
-        console.error(`   ❌ Approval failed: ${error.message}`)
-        await logBotEvent({
-          user_address: userAddress,
-          session_id: session.id,
-          bot_wallet_address: currentWallet.address,
-          action: "approval_failed",
-          status: "error",
-          message: error.message,
-        })
-        const nextIndex = (walletIndex + 1) % WALLETS_PER_USER
-        await updateSessionRotation(session.id, nextIndex)
-        return { shouldContinue: true }
-      }
-    }
-
-    // 9. Execute swap
+    // 8. Execute swap (0x v2 transaction data includes Permit2 single-use approval)
+    // The exec() call on AllowanceHolder handles the entire swap atomically.
+    // No separate approve tx needed — 0x v2 uses single-use signed approvals
+    // bundled into the transaction data.
     const txParams = buildSwapFromQuote(quote)
     console.log(`   📤 Sending swap tx...`)
     const swapHash = await signAndSendTransaction(
