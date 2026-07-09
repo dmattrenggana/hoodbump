@@ -22,12 +22,22 @@ const nextConfig = {
 
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Alias 'accounts' (Tempo SDK) to false - we don't use Tempo chain
-      // This prevents webpack from trying to resolve the optional peer dep
+      // Alias optional peer deps to false (we don't use these features)
+      // These come from Privy + wagmi/connectors optional chains
       config.resolve.alias = {
         ...config.resolve.alias,
+        // Tempo chain (we use Robinhood)
         accounts: false,
-        'tempo/connectors/createConnector': false,
+        // Stripe crypto payments
+        '@stripe/crypto': false,
+        // Farcaster mini app (Solana)
+        '@farcaster/mini-app-solana': false,
+        // MetaMask specific EVM connector
+        '@metamask/connect-evm': false,
+        // Abstract chain
+        '@abstract-foundation/agw-client': false,
+        // Base account
+        '@base-org/account': false,
       }
     }
     return config
