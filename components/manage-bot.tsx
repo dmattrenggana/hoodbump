@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { usePrivy, useWallets } from "@privy-io/react-auth"
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets"
+import { usePrivy } from "@privy-io/react-auth"
+import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
 import { useBotWallets, useCreateBotWallets } from "@/hooks/use-bot-wallets"
 import { Wallet, Plus, Loader2, AlertCircle } from "lucide-react"
 import { formatAddress } from "@/lib/format"
@@ -10,19 +10,12 @@ import { formatEther } from "viem"
 
 export function ManageBot() {
   const { ready, authenticated } = usePrivy()
-  const { wallets } = useWallets()
-  const { client: smartWalletClient } = useSmartWallets()
+  const userAddress = useSmartWalletAddress()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // Get user address from Privy smart wallet
-  const userAddress =
-    smartWalletClient?.account?.address ||
-    wallets.find((w) => (w as any).type === "smart_wallet")?.address ||
-    null
 
   const {
     data: botWallets,

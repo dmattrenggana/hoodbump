@@ -1,20 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { usePrivy, useWallets } from "@privy-io/react-auth"
-import { useSmartWallets } from "@privy-io/react-auth/smart-wallets"
-import { useAccount, useBalance, useChainId } from "wagmi"
+import { usePrivy } from "@privy-io/react-auth"
+import { useChainId } from "wagmi"
 import { Wallet, LogOut, Zap, Loader2 } from "lucide-react"
-import { formatAddress } from "@/lib/format"
+import { formatEth } from "@/lib/format"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
-import { robinhoodChain } from "@/lib/chain-config"
 import { ManageBot } from "@/components/manage-bot"
+import { useSmartWalletAddress } from "@/hooks/use-smart-wallet-address"
+import { useUserBalances } from "@/hooks/use-token-balance"
 
 export default function Home() {
   const { ready, authenticated, login, logout, user } = usePrivy()
-  const { wallets } = useWallets()
-  const { client: smartWalletClient } = useSmartWallets()
-  const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const [mounted, setMounted] = useState(false)
 
@@ -22,28 +19,13 @@ export default function Home() {
     setMounted(true)
   }, [])
 
-  // Smart Wallet address (Privy AA)
-  const smartWalletAddress =
-    smartWalletClient?.account?.address ||
-    wallets.find((w) => (w as any).type === "smart_wallet")?.address ||
-    null
+  // Smart wallet address (Privy AA)
+  const smartWalletAddress = useSmartWalletAddress()
 
-  // WETH balance
-  const { data: wethBalance, isLoading: isLoadingWeth } = useBalance({
-    address: smartWalletAddress
-      ? (smartWalletAddress as `0x${string}`)
-      : undefined,
-    token: RH_WETH_ADDRESS,
-    chainId: robinhoodChain.id,
-  })
-
-  // Native ETH balance (for gas)
-  const { data: ethBalance, isLoading: isLoadingEth } = useBalance({
-    address: smartWalletAddress
-      ? (smartWalletAddress as `0x${string}`)
-      : undefined,
-    chainId: robinhoodChain.id,
-  })
+  // Balances (native ETH + WETH)
+  const { eth, token: weth, isLoading: isLoadingBalances } = useUserBalances(
+    RH_WETH_ADDRESS
+  )
 
   if (!mounted) {
     return (
@@ -144,10 +126,10 @@ export default function Home() {
                     ETH (gas)
                   </p>
                   <p className="font-mono text-sm">
-                    {isLoadingEth ? (
+                    {isLoadingBalances ? (
                       <Loader2 className="h-3 w-3 animate-spin inline" />
-                    ) : ethBalance ? (
-                      `${Number(ethBalance.formatted).toFixed(4)} ETH`
+                    ) : eth ? (
+                      formatEth(eth.value)
                     ) : (
                       "0"
                     )}
@@ -156,10 +138,10 @@ export default function Home() {
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">WETH</p>
                   <p className="font-mono text-sm">
-                    {isLoadingWeth ? (
+                    {isLoadingBalances ? (
                       <Loader2 className="h-3 w-3 animate-spin inline" />
-                    ) : wethBalance ? (
-                      `${Number(wethBalance.formatted).toFixed(4)} WETH`
+                    ) : weth ? (
+                      formatEth(weth.value)
                     ) : (
                       "0"
                     )}
