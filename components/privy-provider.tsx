@@ -38,6 +38,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
   return (
     <PrivyProviderBase
       appId={PRIVY_APP_ID}
+
       config={{
         loginMethods: ["wallet"],
         appearance: {
