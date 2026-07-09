@@ -8,6 +8,7 @@ import { Wallet, LogOut, Zap, Loader2 } from "lucide-react"
 import { formatAddress } from "@/lib/format"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 import { robinhoodChain } from "@/lib/chain-config"
+import { ManageBot } from "@/components/manage-bot"
 
 export default function Home() {
   const { ready, authenticated, login, logout, user } = usePrivy()
