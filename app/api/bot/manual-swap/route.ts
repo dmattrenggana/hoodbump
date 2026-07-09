@@ -13,7 +13,7 @@
  * Returns: { success, swapHash, buyAmount, buyTokenSymbol, sellTokenSymbol, steps: [...], error? }
  */
 import { NextRequest, NextResponse } from "next/server"
-import { isAddress } from "viem"
+import { isAddress, getAddress } from "viem"
 import { executeBotSwap, executeEthSwap } from "@/lib/swap"
 import { getTokenMetadata } from "@/lib/token-name"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
@@ -33,8 +33,12 @@ export async function POST(request: NextRequest) {
     if (typeof walletIndex !== "number" || walletIndex < 0 || walletIndex > 9) {
       return NextResponse.json({ error: "walletIndex must be 0-9" }, { status: 400 })
     }
-    if (!buyToken || !isAddress(buyToken)) {
-      return NextResponse.json({ error: "Invalid buyToken" }, { status: 400 })
+    // Accept address in any case — normalize via getAddress() (works on all-lowercase or all-uppercase too)
+    let normalizedBuyToken: `0x${string}`
+    try {
+      normalizedBuyToken = getAddress(buyToken) as `0x${string}`
+    } catch {
+      return NextResponse.json({ error: `Invalid buyToken: ${buyToken}` }, { status: 400 })
     }
     if (!sellAmountWei) {
       return NextResponse.json({ error: "Missing sellAmountWei" }, { status: 400 })
@@ -44,20 +48,20 @@ export async function POST(request: NextRequest) {
     const sellToken = useNativeEth ? "ETH" : RH_WETH_ADDRESS
 
     console.log(`\n[ManualSwap] user=${userAddress} wallet=${walletIndex} useNativeEth=${useNativeEth}`)
-    console.log(`[ManualSwap] sellToken=${sellToken} buyToken=${buyToken} sellAmount=${sellAmount.toString()}`)
+    console.log(`[ManualSwap] sellToken=${sellToken} buyToken=${normalizedBuyToken} sellAmount=${sellAmount.toString()}`)
 
     const result = useNativeEth
       ? await executeEthSwap({
           userAddress,
           walletIndex,
-          buyToken: buyToken as `0x${string}`,
+          buyToken: normalizedBuyToken,
           sellAmount,
         })
       : await executeBotSwap({
           userAddress,
           walletIndex,
           sellToken: RH_WETH_ADDRESS,
-          buyToken: buyToken as `0x${string}`,
+          buyToken: normalizedBuyToken,
           sellAmount,
         })
 
@@ -66,7 +70,7 @@ export async function POST(request: NextRequest) {
       useNativeEth
         ? Promise.resolve({ symbol: "ETH", decimals: 18 })
         : getTokenMetadata(RH_WETH_ADDRESS),
-      getTokenMetadata(buyToken as `0x${string}`),
+      getTokenMetadata(normalizedBuyToken),
     ])
 
     console.log(`[ManualSwap] ${result.success ? "✅ SUCCESS" : "❌ FAILED"} in ${Date.now() - startTime}ms`)
