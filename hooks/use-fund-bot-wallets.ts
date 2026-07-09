@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useSendTransaction } from "@privy-io/react-auth"
-import { encodeFunctionData, type Address, parseUnits, type Hex } from "viem"
+import { encodeFunctionData, type Address, parseUnits } from "viem"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 
 export interface BotWalletToFund {
@@ -15,6 +15,16 @@ export interface FundConfig {
   walletCount: number
   ethAmount: string
   wethAmount: string
+}
+
+export type FundStep = "eth" | "weth" | "done"
+
+export interface WalletFundResult {
+  walletIndex: number
+  walletAddress: Address
+  eth: { status: "success" | "error"; hash?: `0x${string}`; error?: string }
+  weth: { status: "pending" | "success" | "error"; hash?: `0x${string}`; error?: string }
+  status: "pending" | "partial" | "complete" | "error"
 }
 
 const ERC20_ABI = [
@@ -30,12 +40,6 @@ const ERC20_ABI = [
   },
 ] as const
 
-/**
- * Fund bot wallets from the user's connected smart wallet.
- *
- * Sequential one-by-one — Privy dashboard is configured to batch
- * userOps without multiple popups. Each step = 1 ETH transfer + 1 WETH transfer.
- */
 export function useFundBotWallets(
   smartWalletAddress: string | null,
   botWallets: BotWalletToFund[],
@@ -43,7 +47,7 @@ export function useFundBotWallets(
 ) {
   const { sendTransaction } = useSendTransaction()
   const [isRunning, setIsRunning] = useState(false)
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
+  const [results, setResults] = useState<WalletFundResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const fund = useCallback(async () => {
@@ -62,44 +66,111 @@ export function useFundBotWallets(
 
     setIsRunning(true)
     setError(null)
-    setTxHash(null)
+    // Initialize result for each target
+    setResults(
+      targets.map((w) => ({
+        walletIndex: w.walletIndex,
+        walletAddress: w.address,
+        eth: { status: "pending" },
+        weth: { status: wethWei > 0n ? "pending" : "success" },
+        status: "pending",
+      }))
+    )
 
     try {
-      let lastHash: `0x${string}` | null = null
+      for (let i = 0; i < targets.length; i++) {
+        const wallet = targets[i]
 
-      for (const wallet of targets) {
+        // Step 1: ETH transfer
         if (ethWei > 0n) {
-          const { hash } = await sendTransaction(
-            {
-              to: wallet.address,
-              value: ethWei,
-              chainId: 4663,
-            },
-            { address: smartWalletAddress }
-          )
-          lastHash = hash
+          try {
+            const { hash } = await sendTransaction(
+              {
+                to: wallet.address,
+                value: ethWei,
+                chainId: 4663,
+              },
+              { address: smartWalletAddress }
+            )
+            setResults((prev) => {
+              const next = [...prev]
+              next[i] = {
+                ...next[i],
+                eth: { status: "success", hash },
+              }
+              return next
+            })
+          } catch (err: any) {
+            setResults((prev) => {
+              const next = [...prev]
+              next[i] = {
+                ...next[i],
+                eth: { status: "error", error: err.message || "ETH send failed" },
+              }
+              return next
+            })
+            // Skip WETH for this wallet if ETH failed
+            continue
+          }
+        } else {
+          setResults((prev) => {
+            const next = [...prev]
+            next[i] = { ...next[i], eth: { status: "success" } }
+            return next
+          })
         }
 
+        // Step 2: WETH transfer
         if (wethWei > 0n) {
-          const data = encodeFunctionData({
-            abi: ERC20_ABI,
-            functionName: "transfer",
-            args: [wallet.address, wethWei],
+          try {
+            const data = encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: "transfer",
+              args: [wallet.address, wethWei],
+            })
+            const { hash } = await sendTransaction(
+              {
+                to: RH_WETH_ADDRESS,
+                data,
+                value: BigInt(0),
+                chainId: 4663,
+              },
+              { address: smartWalletAddress }
+            )
+            setResults((prev) => {
+              const next = [...prev]
+              const ethOk = next[i].eth.status === "success"
+              next[i] = {
+                ...next[i],
+                weth: { status: "success", hash },
+                status: ethOk ? "complete" : "partial",
+              }
+              return next
+            })
+          } catch (err: any) {
+            setResults((prev) => {
+              const next = [...prev]
+              const ethOk = next[i].eth.status === "success"
+              next[i] = {
+                ...next[i],
+                weth: { status: "error", error: err.message || "WETH send failed" },
+                status: ethOk ? "partial" : "error",
+              }
+              return next
+            })
+          }
+        } else {
+          setResults((prev) => {
+            const next = [...prev]
+            const ethOk = next[i].eth.status === "success"
+            next[i] = {
+              ...next[i],
+              status: ethOk ? "complete" : "error",
+            }
+            return next
           })
-          const { hash } = await sendTransaction(
-            {
-              to: RH_WETH_ADDRESS,
-              data,
-              value: BigInt(0),
-              chainId: 4663,
-            },
-            { address: smartWalletAddress }
-          )
-          lastHash = hash
         }
       }
-
-      setTxHash(lastHash)
     } catch (err: any) {
       setError(err.message || "Funding failed")
     } finally {
@@ -108,7 +179,7 @@ export function useFundBotWallets(
   }, [smartWalletAddress, botWallets, config, sendTransaction])
 
   const reset = useCallback(() => {
-    setTxHash(null)
+    setResults([])
     setError(null)
   }, [])
 
@@ -116,7 +187,7 @@ export function useFundBotWallets(
     fund,
     reset,
     isRunning,
-    txHash,
+    results,
     error,
   }
 }

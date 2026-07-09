@@ -188,7 +188,7 @@ function FundingPanel({
   const [wethAmount, setWethAmount] = useState("0.0003")
   const [showProgress, setShowProgress] = useState(false)
 
-  const { fund, reset, isRunning, txHash, error, callCount } =
+  const { fund, reset, isRunning, results, error } =
     useFundBotWallets(smartWalletAddress, botWallets, {
       walletCount,
       ethAmount,
@@ -293,8 +293,7 @@ function FundingPanel({
               </span>
             </p>
             <p className="mt-1">
-              To: {walletCount} wallet{walletCount > 1 ? "s" : ""} ·{" "}
-              <span className="text-primary">{callCount} calls in 1 signature</span>
+              To: {walletCount} wallet{walletCount > 1 ? "s" : ""} ({ethAmount} ETH + {wethAmount} WETH each)
             </p>
           </div>
 
@@ -306,12 +305,12 @@ function FundingPanel({
             {isRunning ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Confirm in wallet...
+                Confirm in wallet
               </>
             ) : (
               <>
                 <Zap className="h-4 w-4 mr-2" />
-                Fund {walletCount} Wallet{walletCount > 1 ? "s" : ""} (1 signature)
+                Fund {walletCount} Wallet{walletCount > 1 ? "s" : ""}
               </>
             )}
           </Button>
@@ -321,11 +320,9 @@ function FundingPanel({
       {showProgress && (
         <FundStatusModal
           isRunning={isRunning}
-          txHash={txHash}
+          results={results}
           error={error}
           walletCount={walletCount}
-          ethAmount={ethAmount}
-          wethAmount={wethAmount}
           onClose={handleClose}
         />
       )}
@@ -335,74 +332,155 @@ function FundingPanel({
 
 function FundStatusModal({
   isRunning,
-  txHash,
+  results,
   error,
   walletCount,
-  ethAmount,
-  wethAmount,
   onClose,
 }: {
   isRunning: boolean
-  txHash: `0x${string}` | null
+  results: import("@/hooks/use-fund-bot-wallets").WalletFundResult[]
   error: string | null
   walletCount: number
-  ethAmount: string
-  wethAmount: string
   onClose: () => void
 }) {
+  const successCount = results.filter((r) => r.status === "complete").length
+  const partialCount = results.filter((r) => r.status === "partial").length
+  const errorCount = results.filter((r) => r.status === "error").length
+
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <Card className="bg-card border-border w-full max-w-md">
-        <div className="p-6">
+      <Card className="bg-card border-border w-full max-w-md max-h-[85vh] flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isRunning ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : errorCount > 0 || partialCount > 0 ? (
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+            )}
+            <h3 className="text-sm font-semibold">
+              {isRunning
+                ? "Funding in progress"
+                : errorCount > 0 || partialCount > 0
+                ? "Funding complete with issues"
+                : "Funding complete"}
+            </h3>
+          </div>
+        </div>
+
+        <div className="p-4 flex-1 overflow-y-auto">
           {isRunning && (
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-3" />
-              <h3 className="text-sm font-semibold mb-1">Confirm in Phantom</h3>
+            <div className="text-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
               <p className="text-xs text-muted-foreground">
-                Signing 1 batched transaction...
+                Confirm in your wallet...
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {results.filter((r) => r.status !== "pending").length} / {walletCount} done
               </p>
             </div>
           )}
 
           {error && (
-            <div className="text-center">
-              <AlertCircle className="h-8 w-8 mx-auto text-destructive mb-3" />
-              <h3 className="text-sm font-semibold mb-2">Funding failed</h3>
-              <p className="text-xs text-destructive font-mono mb-4 break-all">{error}</p>
-              <Button onClick={onClose} className="w-full">
-                Close
-              </Button>
+            <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-md">
+              <p className="text-xs text-destructive font-mono break-all">{error}</p>
             </div>
           )}
 
-          {txHash && !isRunning && !error && (
-            <div className="text-center">
-              <CheckCircle2 className="h-8 w-8 mx-auto text-primary mb-3" />
-              <h3 className="text-sm font-semibold mb-1">Funding complete</h3>
-              <p className="text-xs text-muted-foreground mb-1">
-                {walletCount} wallet{walletCount > 1 ? "s" : ""} funded atomically
-              </p>
-              <p className="text-xs text-muted-foreground mb-4 font-mono break-all">
-                {formatAddress(txHash, 6)}
-              </p>
-              <div className="flex gap-2">
-                <a
-                  href={`https://robinhoodchain.blockscout.com/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1"
-                >
-                  <Button variant="outline" className="w-full">
-                    <ExternalLink className="h-3.5 w-3.5 mr-2" />
-                    View tx
-                  </Button>
-                </a>
-                <Button onClick={onClose} className="flex-1">
-                  Done
-                </Button>
-              </div>
+          {!isRunning && results.length > 0 && (
+            <div className="mb-3 text-xs">
+              <span className="text-primary font-mono">{successCount}</span> complete ·{" "}
+              {partialCount > 0 && (
+                <span className="text-amber-500 font-mono">{partialCount} partial · </span>
+              )}
+              {errorCount > 0 && (
+                <span className="text-destructive font-mono">{errorCount} failed</span>
+              )}
             </div>
           )}
+
+          <div className="space-y-2">
+            {results.map((r) => (
+              <div
+                key={r.walletIndex}
+                className="p-2.5 bg-background border border-border rounded-md"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-primary">
+                    Wallet #{r.walletIndex + 1}
+                  </span>
+                  {r.status === "pending" && isRunning ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  ) : r.status === "complete" ? (
+                    <CheckCircle2 className="h-3 w-3 text-primary" />
+                  ) : r.status === "partial" ? (
+                    <AlertCircle className="h-3 w-3 text-amber-500" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 text-destructive" />
+                  )}
+                </div>
+                <p className="text-xs font-mono text-muted-foreground mb-1">
+                  {formatAddress(r.walletAddress, 4)}
+                </p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">ETH:</span>
+                  {r.eth.status === "success" ? (
+                    <span className="text-primary">✓</span>
+                  ) : r.eth.status === "error" ? (
+                    <span className="text-destructive">✗</span>
+                  ) : (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  )}
+                  {r.eth.hash && (
+                    <a
+                      href={`https://robinhoodchain.blockscout.com/tx/${r.eth.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                  {r.eth.error && (
+                    <span className="text-destructive text-xs truncate" title={r.eth.error}>
+                      {r.eth.error.slice(0, 30)}...
+                    </span>
+                  )}
+
+                  <span className="text-muted-foreground ml-2">WETH:</span>
+                  {r.weth.status === "success" ? (
+                    <span className="text-primary">✓</span>
+                  ) : r.weth.status === "error" ? (
+                    <span className="text-destructive">✗</span>
+                  ) : r.weth.status === "pending" ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : null}
+                  {r.weth.hash && (
+                    <a
+                      href={`https://robinhoodchain.blockscout.com/tx/${r.weth.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                </div>
+                {r.weth.error && (
+                  <p className="text-destructive text-xs mt-1 truncate" title={r.weth.error}>
+                    WETH: {r.weth.error.slice(0, 40)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-border">
+          <Button onClick={onClose} className="w-full" disabled={isRunning}>
+            {isRunning ? "Funding..." : "Done"}
+          </Button>
         </div>
       </Card>
     </div>
