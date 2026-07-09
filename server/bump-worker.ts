@@ -176,6 +176,12 @@ async function processUserCycle(state: {
         sellAmount: amountWei,
         takerAddress: currentWallet.address as `0x${string}`,
       })
+      console.log(
+        `   📋 Quote: buyAmount=${(Number(quote.buyAmount) / 1e18).toFixed(6)} gas=${quote.gas}`
+      )
+      if (quote.issues?.simulationIncomplete) {
+        console.warn(`   ⚠️ Quote simulation incomplete — swap may revert`)
+      }
     } catch (error: any) {
       console.error(`   ❌ Quote failed: ${formatZeroXError(error)}`)
       await logBotEvent({
@@ -253,6 +259,7 @@ async function processUserCycle(state: {
             args: [allowanceTarget, MAX_UINT256],
           }),
           value: 0n,
+          gas: 60000n, // explicit gas for ERC20 approve (avoid estimateGas edge cases)
         }
       )
       const approveReceipt = await publicClient.waitForTransactionReceipt({
@@ -279,6 +286,7 @@ async function processUserCycle(state: {
         gas: txParams.gasLimit,
       }
     )
+    console.log(`   🔗 Swap tx: ${swapHash}`)
 
     // 10. Wait for confirmation
     const receipt = await publicClient.waitForTransactionReceipt({
