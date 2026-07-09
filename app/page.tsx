@@ -13,7 +13,7 @@ import { ConfigPanel } from "@/components/config-panel"
 import { ActionButton } from "@/components/action-button"
 import { BotLiveActivity } from "@/components/bot-live-activity"
 import { ManageBot } from "@/components/manage-bot"
-import { useUserBalances } from "@/hooks/use-token-balance"
+import { useUserBalances, useWethBalance } from "@/hooks/use-token-balance"
 import { useBotSession } from "@/hooks/use-bot-session"
 import { useEthPrice } from "@/hooks/use-eth-price"
 import { toast } from "sonner"
@@ -33,7 +33,12 @@ export default function HoodBumpDashboard() {
   const [isMounted, setIsMounted] = useState(false)
   const [activeTab, setActiveTab] = useState("control")
 
-  const { eth, weth, refetch: refetchBalances } = useUserBalances(connectedAddress)
+  const { eth, refetch: refetchEth } = useUserBalances(connectedAddress)
+  const { weth, refetch: refetchWeth } = useWethBalance(connectedAddress, RH_WETH_ADDRESS)
+  const refetchBalances = () => {
+    refetchEth()
+    refetchWeth()
+  }
   const { session, startSession, stopSession, isStarting, isStopping } = useBotSession(connectedAddress)
   const { price: ethPrice } = useEthPrice()
 

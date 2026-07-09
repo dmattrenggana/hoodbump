@@ -2,7 +2,6 @@
 
 import { useBalance } from "wagmi"
 import { type Address } from "viem"
-import { useSmartWalletAddress } from "./use-smart-wallet-address"
 import { robinhoodChain } from "@/lib/chain-config"
 
 interface TokenBalance {
@@ -12,25 +11,29 @@ interface TokenBalance {
 }
 
 /**
- * Get ETH (native) and token balances for the user's smart wallet.
- * Replaces inline balance formatting like:
- *   `${Number(ethBalance.formatted).toFixed(4)} ETH`
+ * Get ETH (native) and token balances for the given wallet address.
+ *
+ * IMPORTANT: The wallet address MUST be passed explicitly from page.tsx
+ * (which derives it from Privy wallets). Earlier versions called
+ * useSmartWalletAddress internally, which had timing issues — the
+ * address was often null on first render even after login.
+ *
+ * Usage:
+ *   const { eth, weth, refetch } = useUserBalances(walletAddress)
  */
-export function useUserBalances(tokenAddress?: Address) {
-  const smartWalletAddress = useSmartWalletAddress()
+export function useUserBalances(walletAddress: string | null) {
+  // Only query when address is set
+  const enabled = !!walletAddress
 
   // Native ETH balance (for gas)
   const ethBalanceQuery = useBalance({
-    address: smartWalletAddress ?? undefined,
+    address: walletAddress ?? undefined,
     chainId: robinhoodChain.id,
+    query: { enabled, refetchInterval: 15_000 },
   })
 
-  // Token balance (e.g., WETH)
-  const tokenBalanceQuery = useBalance({
-    address: smartWalletAddress ?? undefined,
-    token: tokenAddress,
-    chainId: robinhoodChain.id,
-  })
+  // Token balance (e.g., WETH) — only if explicitly requested
+  // (Note: caller should use useWethBalance separately for clarity)
 
   return {
     eth: ethBalanceQuery.data
@@ -40,17 +43,33 @@ export function useUserBalances(tokenAddress?: Address) {
           value: ethBalanceQuery.data.value,
         }
       : null,
-    token: tokenBalanceQuery.data
+    isLoading: ethBalanceQuery.isLoading,
+    refetch: () => ethBalanceQuery.refetch(),
+  }
+}
+
+/**
+ * Get WETH (ERC-20 token) balance for the given wallet address.
+ * Separate hook so we don't conflate with ETH native balance.
+ */
+export function useWethBalance(walletAddress: string | null, wethAddress: Address) {
+  const enabled = !!walletAddress
+  const tokenQuery = useBalance({
+    address: walletAddress ?? undefined,
+    token: wethAddress,
+    chainId: robinhoodChain.id,
+    query: { enabled, refetchInterval: 15_000 },
+  })
+
+  return {
+    weth: tokenQuery.data
       ? {
-          formatted: tokenBalanceQuery.data.formatted,
-          symbol: tokenBalanceQuery.data.symbol,
-          value: tokenBalanceQuery.data.value,
+          formatted: tokenQuery.data.formatted,
+          symbol: tokenQuery.data.symbol,
+          value: tokenQuery.data.value,
         }
       : null,
-    isLoading: ethBalanceQuery.isLoading || tokenBalanceQuery.isLoading,
-    refetch: () => {
-      ethBalanceQuery.refetch()
-      tokenBalanceQuery.refetch()
-    },
+    isLoading: tokenQuery.isLoading,
+    refetch: () => tokenQuery.refetch(),
   }
 }
