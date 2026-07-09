@@ -10,8 +10,7 @@
  *    - Pick bot wallet via round-robin
  *    - Calculate variable amount (±30% of base)
  *    - Get 0x quote (WETH → target token)
- *    - Check + approve allowance (if needed)
- *    - Execute swap
+ *    - Execute swap (0x v2 transaction data includes Permit2 single-use approval)
  *    - Update wallet balances
  *    - Log to bot_logs
  *    - Schedule next swap with jitter
@@ -133,11 +132,30 @@ async function processUserCycle(state: {
 
     if (wethBalance < amountWei) {
       console.log(`   ⚠️ Insufficient WETH (${(Number(wethBalance) / 1e18).toFixed(4)} < ${(Number(amountWei) / 1e18).toFixed(4)})`)
-      
-      // Check if ALL wallets are out
-      const allEmpty = botWallets.every(
-        (w) => BigInt(w.weth_balance_wei) < baseAmountWei
+
+      // Check if ALL wallets are out — use on-chain balances (not stale DB)
+      const allWalletsBalances = await Promise.all(
+        botWallets.map((w) =>
+          publicClient
+            .readContract({
+              address: RH_WETH_ADDRESS,
+              abi: [
+                {
+                  inputs: [{ name: "account", type: "address" }],
+                  name: "balanceOf",
+                  outputs: [{ name: "", type: "uint256" }],
+                  stateMutability: "view",
+                  type: "function",
+                },
+              ],
+              functionName: "balanceOf",
+              args: [w.address as `0x${string}`],
+            })
+            .then((bal) => ({ addr: w.address, bal: bal as bigint }))
+            .catch(() => ({ addr: w.address, bal: 0n }))
+        )
       )
+      const allEmpty = allWalletsBalances.every((b) => b.bal < baseAmountWei)
       if (allEmpty) {
         console.log(`   🛑 All bot wallets depleted`)
         await deactivateSession(userAddress, "All bot wallets depleted")
