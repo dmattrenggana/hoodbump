@@ -10,8 +10,8 @@
  *    - Pick bot wallet via round-robin
  *    - Calculate variable amount (±30% of base)
  *    - Get 0x quote (WETH → target token)
- *    - Execute swap (0x v2 transaction data includes Permit2 single-use approval)
- *    - Update wallet balances
+ *    - Approve WETH → AllowanceHolder (if allowance < amount)
+ *    - Execute swap
  *    - Log to bot_logs
  *    - Schedule next swap with jitter
  * 
@@ -36,6 +36,7 @@ import {
   getPublicClient,
 } from "../lib/bot-wallet"
 import { getZeroXQuote, buildSwapFromQuote, formatZeroXError } from "../lib/swap"
+import { encodeFunctionData } from "viem"
 import {
   getNextInterval,
   shouldSkipCycle,
@@ -193,11 +194,80 @@ async function processUserCycle(state: {
       return { shouldContinue: true }
     }
 
-    // 8. Execute swap (0x v2 transaction data includes Permit2 single-use approval)
-    // The exec() call on AllowanceHolder handles the entire swap atomically.
-    // No separate approve tx needed — 0x v2 uses single-use signed approvals
-    // bundled into the transaction data.
+    // 8. Approve WETH to AllowanceHolder (REQUIRED on Robinhood's standard AllowanceHolder)
+    // The Robinhood AllowanceHolder is the standard 0x v2 AllowanceHolder contract which
+    // does regular ERC20 `transferFrom(owner, recipient, amount)` internally — it needs
+    // an actual ERC20 allowance (NOT Permit2). Without approve, exec() reverts silently.
+    //
+    // Note: quote.allowanceTarget is the spender (AllowanceHolder address).
     const txParams = buildSwapFromQuote(quote)
+    const allowanceTarget = txParams.allowanceTarget
+    console.log(`   🔍 AllowanceHolder: ${allowanceTarget}`)
+
+    const currentAllowance = (await publicClient.readContract({
+      address: RH_WETH_ADDRESS,
+      abi: [
+        {
+          name: "allowance",
+          type: "function",
+          stateMutability: "view",
+          inputs: [
+            { name: "owner", type: "address" },
+            { name: "spender", type: "address" },
+          ],
+          outputs: [{ name: "", type: "uint256" }],
+        },
+      ],
+      functionName: "allowance",
+      args: [
+        currentWallet.address as `0x${string}`,
+        allowanceTarget,
+      ],
+    })) as bigint
+
+    if (currentAllowance < amountWei) {
+      console.log(
+        `   🔓 Approving WETH → ${allowanceTarget.slice(0, 10)}... (current ${(Number(currentAllowance) / 1e18).toFixed(6)}, need ${(Number(amountWei) / 1e18).toFixed(6)})`
+      )
+      // MAX_UINT256 = (2n ** 256n) - 1n
+      const MAX_UINT256 = (1n << 256n) - 1n
+      const approveHash = await signAndSendTransaction(
+        userAddress,
+        walletIndex,
+        {
+          to: RH_WETH_ADDRESS,
+          data: encodeFunctionData({
+            abi: [
+              {
+                name: "approve",
+                type: "function",
+                stateMutability: "nonpayable",
+                inputs: [
+                  { name: "spender", type: "address" },
+                  { name: "amount", type: "uint256" },
+                ],
+                outputs: [{ name: "", type: "bool" }],
+              },
+            ],
+            functionName: "approve",
+            args: [allowanceTarget, MAX_UINT256],
+          }),
+          value: 0n,
+        }
+      )
+      const approveReceipt = await publicClient.waitForTransactionReceipt({
+        hash: approveHash,
+        confirmations: 1,
+      })
+      if (approveReceipt.status !== "success") {
+        throw new Error(`Approve reverted`)
+      }
+      console.log(`   ✅ Approved (block ${approveReceipt.blockNumber})`)
+    } else {
+      console.log(`   ✅ Existing allowance sufficient`)
+    }
+
+    // 9. Execute swap
     console.log(`   📤 Sending swap tx...`)
     const swapHash = await signAndSendTransaction(
       userAddress,
