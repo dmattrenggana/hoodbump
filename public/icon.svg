@@ -1,4 +1,32 @@
-<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <rect width="32" height="32" rx="6" fill="#00ff00"/>
-  <path d="M16 6 L20 14 L26 14 L21 19 L23 27 L16 22 L9 27 L11 19 L6 14 L12 14 Z" fill="#000000"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Black background with rounded corners for favicon -->
+  <rect width="512" height="512" rx="80" fill="#000000"/>
+
+  <!-- Green arrow up-right (top-left, simplified) -->
+  <g transform="translate(60, 80)">
+    <line x1="0" y1="50" x2="35" y2="50" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <line x1="0" y1="68" x2="25" y2="68" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <line x1="0" y1="86" x2="30" y2="86" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <path d="M 40 80 L 130 -10" stroke="#00ff00" stroke-width="22" stroke-linecap="round"/>
+    <path d="M 80 -10 L 130 -10 L 130 40 Z" fill="#00ff00"/>
+  </g>
+
+  <!-- Main green lightning bolt (center) -->
+  <path d="M 230 80
+           L 320 230
+           L 270 230
+           L 330 350
+           L 200 220
+           L 250 220
+           Z"
+        fill="#00ff00"/>
+
+  <!-- Red arrow down-left (bottom-right, simplified) -->
+  <g transform="translate(390, 270)">
+    <line x1="120" y1="50" x2="60" y2="50" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <line x1="110" y1="68" x2="55" y2="68" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <line x1="115" y1="86" x2="60" y2="86" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <path d="M 0 0 L 60 130" stroke="#ff0040" stroke-width="22" stroke-linecap="round"/>
+    <path d="M 20 80 L 60 130 L 10 130 Z" fill="#ff0040"/>
+  </g>
 </svg>

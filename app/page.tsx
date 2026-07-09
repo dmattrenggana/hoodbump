@@ -6,6 +6,7 @@ import { useChainId } from "wagmi"
 import { Wallet, LogOut, Zap, Loader2 } from "lucide-react"
 import { formatEth } from "@/lib/format"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
+import { robinhoodChain } from "@/lib/chain-config"
 import { ManageBot } from "@/components/manage-bot"
 import { ConfigPanel } from "@/components/config-panel"
 import { ActivityFeed } from "@/components/activity-feed"
@@ -43,9 +44,11 @@ export default function Home() {
       <header className="border border-border rounded-lg bg-card p-6 mb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="h-6 w-6 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.svg"
+              alt="HoodBump"
+              className="h-12 w-12 rounded-lg"
+            />
             <div>
               <h1 className="text-xl font-bold">HoodBump</h1>
               <p className="text-xs text-muted-foreground">

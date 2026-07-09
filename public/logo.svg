@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Black background -->
+  <rect width="512" height="512" fill="#000000"/>
+
+  <!-- Green arrow up-right (top-left) -->
+  <g transform="translate(40, 60)">
+    <!-- Motion lines -->
+    <line x1="-10" y1="50" x2="40" y2="50" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <line x1="-10" y1="70" x2="30" y2="70" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <line x1="-10" y1="90" x2="35" y2="90" stroke="#00ff00" stroke-width="6" stroke-linecap="round"/>
+    <!-- Arrow body -->
+    <path d="M 40 80 L 130 -10" stroke="#00ff00" stroke-width="20" stroke-linecap="round"/>
+    <!-- Arrowhead -->
+    <path d="M 80 -10 L 130 -10 L 130 40 Z" fill="#00ff00"/>
+  </g>
+
+  <!-- Main green lightning bolt (center) -->
+  <path d="M 230 80
+           L 320 230
+           L 270 230
+           L 330 350
+           L 200 220
+           L 250 220
+           Z"
+        fill="#00ff00"
+        stroke="#000000"
+        stroke-width="3"/>
+
+  <!-- Red arrow down-left (bottom-right) -->
+  <g transform="translate(390, 270)">
+    <!-- Motion lines -->
+    <line x1="120" y1="50" x2="60" y2="50" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <line x1="110" y1="70" x2="55" y2="70" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <line x1="115" y1="90" x2="60" y2="90" stroke="#ff0040" stroke-width="6" stroke-linecap="round"/>
+    <!-- Arrow body -->
+    <path d="M 0 0 L 60 130" stroke="#ff0040" stroke-width="20" stroke-linecap="round"/>
+    <!-- Arrowhead -->
+    <path d="M 20 80 L 60 130 L 10 130 Z" fill="#ff0040"/>
+  </g>
+
+  <!-- HoodBump text -->
+  <text x="256" y="475"
+        font-family="'Arial Black', 'Helvetica', sans-serif"
+        font-size="78"
+        font-weight="900"
+        font-style="italic"
+        fill="#c4ff00"
+        text-anchor="middle"
+        letter-spacing="-2">
+    HoodBump
+  </text>
+</svg>
