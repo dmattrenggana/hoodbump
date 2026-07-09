@@ -94,12 +94,11 @@ export async function getZeroXQuote(params: {
     swapFeeToken: params.sellToken,
   })
 
-  const url = `${ZEROX_API_BASE}/swap/allowance-holder/quote?${queryParams.toString()}`
+  const url = `${ZEROX_API_BASE}/swap/v1/quote?${queryParams.toString()}`
 
   const response = await fetch(url, {
     headers: {
       "0x-api-key": ZEROX_API_KEY,
-      "0x-version": ZEROX_VERSION,
     },
   })
 
