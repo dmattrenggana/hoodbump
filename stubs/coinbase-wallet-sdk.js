@@ -1,19 +1,25 @@
-// Comprehensive stub for @coinbase/wallet-sdk
-// Returns objects that satisfy wagmi/Privy/viem's expectations
-// All methods are no-ops or return safe defaults
+// Comprehensive stub for @coinbase/wallet-sdk v4.3.2
+// Replaces CoinbaseWalletSDK class + createCoinbaseWalletSDK function
+// Provides no-op EIP-1193 providers to prevent crashes on unsupported chains
+
+import { EventEmitter } from "events"
 
 // EIP-1193 compliant fake provider
 function fakeProvider() {
-  const handlers = new Map()
+  const emitter = new EventEmitter()
   return {
-    // RPC method handler
-    request: async ({ method, params }) => {
-      // Log for debugging
-      if (typeof window !== "undefined") {
-        console.debug("[stub] eth request:", method)
-      }
+    // Make this look like an EventEmitter
+    on: emitter.on.bind(emitter),
+    once: emitter.once.bind(emitter),
+    off: emitter.off.bind(emitter),
+    emit: emitter.emit.bind(emitter),
+    removeListener: emitter.removeListener.bind(emitter),
+    removeAllListeners: emitter.removeAllListeners.bind(emitter),
+    listeners: emitter.listeners.bind(emitter),
+    addListener: emitter.on.bind(emitter),
 
-      // Standard RPC methods - return minimal valid responses
+    // EIP-1193 request method
+    request: async ({ method, params }) => {
       const responses = {
         eth_chainId: "0x1233", // 4663 in hex
         net_version: "4663",
@@ -36,57 +42,97 @@ function fakeProvider() {
       return responses[method] ?? null
     },
 
-    // Event emitter methods - return self for chaining
-    on: function (event, handler) {
-      if (!handlers.has(event)) handlers.set(event, [])
-      handlers.get(event).push(handler)
-      return this
-    },
-    once: function (event, handler) {
-      const wrap = (...args) => {
-        this.removeListener(event, wrap)
-        handler(...args)
-      }
-      return this.on(event, wrap)
-    },
-    emit: function (event, ...args) {
-      const list = handlers.get(event) || []
-      list.forEach((h) => h(...args))
-      return true
-    },
-    removeListener: function (event, handler) {
-      const list = handlers.get(event) || []
-      const idx = list.indexOf(handler)
-      if (idx >= 0) list.splice(idx, 1)
-      return this
-    },
-    removeAllListeners: function (event) {
-      if (event) handlers.delete(event)
-      else handlers.clear()
-      return this
-    },
-    listeners: function (event) {
-      return handlers.get(event) || []
-    },
-
-    // Misc methods
+    // Misc
     isConnected: () => false,
     disconnect: async () => {},
     enable: async () => [],
   }
 }
 
-// Fake SDK class
+// CoinbaseWalletSDK CLASS (matching actual SDK v4.3.2 API)
+export class CoinbaseWalletSDK {
+  constructor(metadata = {}) {
+    this.metadata = {
+      appName: metadata.appName || "Dapp",
+      appLogoUrl: metadata.appLogoUrl || null,
+      appChainIds: metadata.appChainIds || [],
+    }
+    this._provider = null
+  }
+
+  makeWeb3Provider(preference = { options: "all" }) {
+    return fakeProvider()
+  }
+
+  getProvider() {
+    if (!this._provider) this._provider = fakeProvider()
+    return this._provider
+  }
+
+  get walletProvider() {
+    if (!this._provider) this._provider = fakeProvider()
+    return this._provider
+  }
+
+  set walletProvider(p) {
+    this._provider = p
+  }
+
+  disconnect() {
+    return Promise.resolve()
+  }
+  destroy() {}
+  isExtensionUpdateAvailable() {
+    return Promise.resolve(false)
+  }
+  isConnected() {
+    return false
+  }
+
+  getAddress() {
+    return Promise.resolve([])
+  }
+  getAccounts() {
+    return Promise.resolve([])
+  }
+  getInfo() {
+    return Promise.resolve({ wallet: "stub", version: "0.0.0-stub" })
+  }
+  getSigner() {
+    return Promise.resolve(null)
+  }
+  getChainId() {
+    return Promise.resolve("0x1233")
+  }
+  getBalance() {
+    return Promise.resolve("0x0")
+  }
+  request() {
+    return Promise.resolve(null)
+  }
+
+  setAppInfo() {}
+  setAppName() {}
+  setAppLogoUrl() {}
+  setPreference() {}
+
+  subaccounts = {
+    get: async () => [],
+    create: async () => ({}),
+  }
+
+  version = "0.0.0-stub"
+}
+
+// createCoinbaseWalletSDK function (newer API in v4.3.2)
 export function createCoinbaseWalletSDK(_options = {}) {
   let providerInstance = null
 
   return {
-    // Returns Promise that resolves to EIP-1193 provider
     getProvider: async function () {
       if (!providerInstance) providerInstance = fakeProvider()
       return providerInstance
     },
-    // Allow synchronous access too
     get walletProvider() {
       if (!providerInstance) providerInstance = fakeProvider()
       return providerInstance
@@ -95,13 +141,11 @@ export function createCoinbaseWalletSDK(_options = {}) {
       providerInstance = p
     },
 
-    // SDK lifecycle methods
     disconnect: async () => {},
     destroy: () => {},
     isExtensionUpdateAvailable: async () => false,
     isConnected: () => false,
 
-    // Sub-wallet methods
     getAddress: async () => [],
     getAccounts: async () => [],
     getInfo: async () => ({ wallet: "stub", version: "0.0.0" }),
@@ -110,11 +154,10 @@ export function createCoinbaseWalletSDK(_options = {}) {
     getBalance: async () => "0x0",
     request: async () => null,
 
-    // Web3 methods
     makeWeb3Provider: async () => fakeProvider(),
     makeEthereumProvider: async () => fakeProvider(),
 
-    // Event subscription
+    // Event subscription (also on top-level SDK)
     on: function () { return this },
     once: function () { return this },
     off: function () { return this },
@@ -122,13 +165,11 @@ export function createCoinbaseWalletSDK(_options = {}) {
     removeAllListeners: function () { return this },
     emit: () => true,
 
-    // Metadata
     setAppInfo: () => {},
     setAppName: () => {},
     setAppLogoUrl: () => {},
     setPreference: () => {},
 
-    // Subwallets / SCW
     subaccounts: {
       get: async () => [],
       create: async () => ({}),
@@ -138,14 +179,7 @@ export function createCoinbaseWalletSDK(_options = {}) {
   }
 }
 
-export default createCoinbaseWalletSDK
+export default CoinbaseWalletSDK
 
-// Other named exports that might be imported
-export const CoinbaseWalletSDK = createCoinbaseWalletSDK
-
-// Some bundlers check for instanceof
-export class CoinbaseWalletProvider {
-  constructor() {
-    return fakeProvider()
-  }
-}
+// Legacy export
+export const CoinbaseWalletProvider = fakeProvider
