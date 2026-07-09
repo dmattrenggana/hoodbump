@@ -34,7 +34,6 @@ import {
   getBotWallets,
   signAndSendTransaction,
   getPublicClient,
-  updateWalletBalances,
 } from "../lib/bot-wallet"
 import { getZeroXQuote, buildSwapFromQuote, formatZeroXError } from "../lib/swap"
 import {
@@ -218,33 +217,8 @@ async function processUserCycle(state: {
     })
     console.log(`   ✅ Swap confirmed in block ${receipt.blockNumber}`)
 
-    // 11. Update balances
-    const newEthBalance = await publicClient.getBalance({
-      address: currentWallet.address as `0x${string}`,
-    })
-    const newWethBalance = (await publicClient.readContract({
-      address: RH_WETH_ADDRESS,
-      abi: [
-        {
-          inputs: [{ name: "account", type: "address" }],
-          name: "balanceOf",
-          outputs: [{ name: "", type: "uint256" }],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      functionName: "balanceOf",
-      args: [currentWallet.address as `0x${string}`],
-    })) as bigint
-    const gasSpent = BigInt(currentWallet.total_gas_spent_wei) + BigInt(receipt.gasUsed * receipt.effectiveGasPrice)
-
-    await updateWalletBalances(
-      userAddress,
-      walletIndex,
-      newEthBalance,
-      newWethBalance,
-      gasSpent
-    )
+    // 11. On-chain is source of truth — skip DB balance update.
+    // Bot log records the tx hash + amount; balances read live from chain.
 
     await logBotEvent({
       user_address: userAddress,
