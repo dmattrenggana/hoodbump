@@ -40,7 +40,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
         loginMethods: ["wallet"],
         appearance: {
           theme: "dark",
-          accentColor: "#00ff00",
+          accentColor: "#ccff00",
           logo: "/icon.png",
         },
         // Embedded wallets (regular EOAs) - still works for email/social users
