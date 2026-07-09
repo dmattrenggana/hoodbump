@@ -1,11 +1,8 @@
 import {
   type Address,
   type Hex,
-  parseUnits,
-  formatUnits,
 } from "viem"
 import {
-  RH_WETH_ADDRESS,
   ZEROX_API_BASE,
   ZEROX_API_KEY,
   AFFILIATE_FEE_BPS,
@@ -17,9 +14,21 @@ import {
 
 /**
  * 0x Swap API integration for HoodBump
- * 
- * Docs: https://0x.org/docs
- * Robinhood Chain support: confirmed (chainId 4663)
+ *
+ * Docs: https://0x.org/docs/evm/0x-swap-api/introduction
+ *
+ * Uses the new allowance-holder/quote endpoint (v2):
+ *   GET https://api.0x.org/swap/allowance-holder/quote?chainId=...
+ *
+ * Required headers:
+ *   0x-api-key: <key>
+ *   0x-version: v2
+ *
+ * Fee structure (integrator fee):
+ *   swapFeeRecipient + swapFeeBps + swapFeeToken
+ *
+ * Response shape (v2):
+ *   { transaction: { to, data, value, gas }, buyAmount, minBuyAmount, ... }
  */
 
 export interface ZeroXQuote {
@@ -30,15 +39,15 @@ export interface ZeroXQuote {
   minBuyAmount: string
   gasPrice: string
   gas: string
-  to: Address
-  data: Hex
-  value: string
-  allowanceTarget: Address
-  sources: Array<{ name: string; proportion: string }>
-  buyTokenAddress: Address
-  sellTokenAddress: Address
   estimatedPriceImpact: string
-  // Affiliate fee
+  sources: Array<{ name: string; proportion: string }>
+  allowanceTarget: Address
+  transaction: {
+    to: Address
+    data: Hex
+    value: string
+    gas: string
+  }
   fees?: {
     integratorFee?: {
       amount: string
@@ -48,10 +57,12 @@ export interface ZeroXQuote {
 }
 
 /**
- * Get a swap quote from 0x
- * 
- * @param params - Swap parameters
- * @returns Quote with transaction data
+ * Get a swap quote from 0x Swap API v2 (allowance-holder).
+ *
+ * The bot wallet must:
+ *   1. Hold WETH (sellToken) — at least sellAmount
+ *   2. Hold ETH — for gas
+ *   3. Approve the 0x allowanceTarget to spend its WETH before executing
  */
 export async function getZeroXQuote(params: {
   sellToken: Address
@@ -60,9 +71,7 @@ export async function getZeroXQuote(params: {
   takerAddress: Address
 }): Promise<ZeroXQuote> {
   if (!ZEROX_API_KEY) {
-    throw new Error(
-      "ZEROX_API_KEY not set. Get one at https://dashboard.0x.org"
-    )
+    throw new Error("ZEROX_API_KEY not set. Get one at https://dashboard.0x.org")
   }
 
   const queryParams = new URLSearchParams({
@@ -73,12 +82,13 @@ export async function getZeroXQuote(params: {
     takerAddress: params.takerAddress,
     slippageBps: SLIPPAGE_BPS.toString(),
 
-    // HoodBump affiliate fee (1%)
-    affiliateAddress: HOODBUMP_TREASURY_ADDRESS,
-    affiliateFeeBps: AFFILIATE_FEE_BPS.toString(),
+    // HoodBump 1% integrator fee — paid in WETH
+    swapFeeRecipient: HOODBUMP_TREASURY_ADDRESS,
+    swapFeeBps: AFFILIATE_FEE_BPS.toString(),
+    swapFeeToken: params.sellToken,
   })
 
-  const url = `${ZEROX_API_BASE}/swap/v1/quote?${queryParams.toString()}`
+  const url = `${ZEROX_API_BASE}/swap/allowance-holder/quote?${queryParams.toString()}`
 
   const response = await fetch(url, {
     headers: {
@@ -94,13 +104,18 @@ export async function getZeroXQuote(params: {
     )
   }
 
-  const quote = await response.json()
-  return quote as ZeroXQuote
+  const quote = (await response.json()) as ZeroXQuote
+
+  // v2 wraps tx data under .transaction
+  if (!quote.transaction) {
+    throw new Error("0x API response missing transaction field")
+  }
+
+  return quote
 }
 
 /**
  * Calculate USD value for a token amount using 0x price
- * (Approximation using WETH price)
  */
 export async function getSwapPriceImpact(
   sellToken: Address,
@@ -108,40 +123,38 @@ export async function getSwapPriceImpact(
   sellAmount: bigint
 ): Promise<{ priceImpact: string; buyAmountEstimate: bigint }> {
   try {
-    // For Robinhood Chain, USDG is the primary stable
     const quote = await getZeroXQuote({
       sellToken,
       buyToken,
       sellAmount,
-      takerAddress: "0x0000000000000000000000000000000000000001", // dummy for quote
+      takerAddress: "0x0000000000000000000000000000000000000001",
     })
     return {
       priceImpact: quote.estimatedPriceImpact,
       buyAmountEstimate: BigInt(quote.buyAmount),
     }
-  } catch (error) {
-    return {
-      priceImpact: "0",
-      buyAmountEstimate: BigInt(0),
-    }
+  } catch {
+    return { priceImpact: "0", buyAmountEstimate: BigInt(0) }
   }
 }
 
 /**
- * Build a swap transaction from quote
- * Returns the calldata and target contract for execution
+ * Build a swap transaction from quote.
+ * Returns the calldata, target, value, and gas limit for execution.
  */
 export function buildSwapFromQuote(quote: ZeroXQuote): {
   to: Address
   data: Hex
   value: bigint
   gasLimit: bigint
+  allowanceTarget: Address
 } {
   return {
-    to: quote.to as Address,
-    data: quote.data as Hex,
-    value: BigInt(quote.value || "0"),
-    gasLimit: BigInt(quote.gas),
+    to: quote.transaction.to,
+    data: quote.transaction.data,
+    value: BigInt(quote.transaction.value || "0"),
+    gasLimit: BigInt(quote.transaction.gas || quote.gas || "300000"),
+    allowanceTarget: quote.allowanceTarget,
   }
 }
 
@@ -151,7 +164,6 @@ export function buildSwapFromQuote(quote: ZeroXQuote): {
 export function formatZeroXError(error: any): string {
   const message = error?.message || "Unknown error"
 
-  // Common 0x errors
   if (message.includes("INSUFFICIENT_ASSET_LIQUIDITY")) {
     return "Not enough liquidity in the pool. Try a smaller amount or different token."
   }
@@ -163,6 +175,9 @@ export function formatZeroXError(error: any): string {
   }
   if (message.includes("TOKEN_NOT_FOUND")) {
     return "Token not found. Check the address is correct."
+  }
+  if (message.includes("no Route")) {
+    return "No route found for this swap. Token may have no liquidity."
   }
 
   return message
