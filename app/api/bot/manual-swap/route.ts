@@ -80,10 +80,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Convert BigInt fields to strings for JSON serialization
-    const serializedResult = {
-      ...result,
-      buyAmount: result.buyAmount !== undefined ? result.buyAmount.toString() : undefined,
-    }
+    // (NextResponse.json uses JSON.stringify which can't handle BigInt)
+    const serializedResult = JSON.parse(
+      JSON.stringify(result, (_, value) =>
+        typeof value === "bigint" ? value.toString() : value
+      )
+    )
 
     return NextResponse.json({
       ...serializedResult,
