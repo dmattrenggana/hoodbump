@@ -363,34 +363,42 @@ export async function executeBotSwap(params: {
 
     const publicClient = getPublicClient()
 
-    // Check WETH balance
-    steps.push({ step: "check_balance", status: "info", detail: `Reading WETH balance` })
-    const wethBalance = (await publicClient.readContract({
-      address: RH_WETH_ADDRESS,
-      abi: [
-        {
-          inputs: [{ name: "account", type: "address" }],
-          name: "balanceOf",
-          outputs: [{ name: "", type: "uint256" }],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      functionName: "balanceOf",
-      args: [wallet.address as `0x${string}`],
-    })) as bigint
+    // Check balance (ETH or ERC-20 depending on sellToken)
+    const isNativeEth = sellToken.toLowerCase() === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    steps.push({
+      step: "check_balance",
+      status: "info",
+      detail: `Reading ${isNativeEth ? "ETH" : "WETH"} balance`,
+    })
+    const wethBalance = isNativeEth
+      ? await publicClient.getBalance({ address: wallet.address as `0x${string}` })
+      : (await publicClient.readContract({
+          address: RH_WETH_ADDRESS,
+          abi: [
+            {
+              inputs: [{ name: "account", type: "address" }],
+              name: "balanceOf",
+              outputs: [{ name: "", type: "uint256" }],
+              stateMutability: "view",
+              type: "function",
+            },
+          ],
+          functionName: "balanceOf",
+          args: [wallet.address as `0x${string}`],
+        })) as bigint
 
     if (wethBalance < sellAmount) {
+      const symbol = isNativeEth ? "ETH" : "WETH"
       steps[steps.length - 1].status = "fail"
-      steps[steps.length - 1].detail = `Insufficient WETH: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`
+      steps[steps.length - 1].detail = `Insufficient ${symbol}: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`
       return {
         success: false,
-        error: `Insufficient WETH in wallet ${walletIndex}: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`,
+        error: `Insufficient ${symbol} in wallet ${walletIndex}: ${(Number(wethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`,
         steps,
       }
     }
     steps[steps.length - 1].status = "ok"
-    steps[steps.length - 1].detail = `WETH: ${(Number(wethBalance) / 1e18).toFixed(6)}`
+    steps[steps.length - 1].detail = `${isNativeEth ? "ETH" : "WETH"}: ${(Number(wethBalance) / 1e18).toFixed(6)}`
 
     // Get quote
     steps.push({ step: "get_quote", status: "info", detail: `Calling 0x v2 quote API` })

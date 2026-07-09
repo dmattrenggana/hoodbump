@@ -13,6 +13,7 @@ import { ConfigPanel } from "@/components/config-panel"
 import { ActionButton } from "@/components/action-button"
 import { BotLiveActivity } from "@/components/bot-live-activity"
 import { ManageBot } from "@/components/manage-bot"
+import { WalletTokensPanel } from "@/components/wallet-tokens-panel"
 import { useUserBalances, useWethBalance } from "@/hooks/use-token-balance"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 import { useBotSession } from "@/hooks/use-bot-session"
@@ -219,6 +220,9 @@ export default function HoodBumpDashboard() {
           {/* MANAGE BOT TAB */}
           <TabsContent value="manage" className="space-y-4">
             <ManageBot userAddress={connectedAddress} />
+            {connectedAddress && (
+              <WalletTokensPanel userAddress={connectedAddress} />
+            )}
           </TabsContent>
         </Tabs>
       )}

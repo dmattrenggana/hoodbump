@@ -21,10 +21,13 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
-    // Disable Coinbase SDK completely (Privy auto-imports it but we use Kernel wallets)
+    // Coinbase SDK aliased to a local stub — Privy tries to use Coinbase Smart
+    // Wallet which doesn't support Robinhood Chain (4663). Stub returns a no-op
+    // SDK so Privy initializes without crashing. Real Coinbase SDK is never loaded.
+    const path = require('path')
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@coinbase/wallet-sdk': false,
+      '@coinbase/wallet-sdk': path.resolve('./lib/coinbase-stub.js'),
       '@walletconnect/ethereum-provider': false,
       '@safe-global/safe-apps-sdk': false,
       '@safe-global/safe-apps-provider': false,

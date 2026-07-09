@@ -130,11 +130,12 @@ async function processUserCycle(state: {
 
     const publicClient = getPublicClient()
 
-    // 7. Get 0x quote
+    // 7. Get 0x quote (selling native ETH via 0x v2 Settler)
     let quote
     try {
+      const ETH_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
       quote = await getZeroXQuote({
-        sellToken: RH_WETH_ADDRESS,
+        sellToken: ETH_ADDRESS as `0x${string}`,
         buyToken: session.token_address as `0x${string}`,
         sellAmount: amountWei,
         takerAddress: currentWallet.address as `0x${string}`,
