@@ -51,11 +51,13 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
             createOnLogin: "all-users",
           },
         },
+        // Smart wallets disabled — Coinbase Smart Wallet doesn't support
+        // Robinhood Chain (chain ID 4663) and crashes on init.
+        // HoodBump bots use EOA wallets anyway, so we don't need AA for main wallet.
+        // Users can still connect external wallets (MetaMask, WalletConnect) or use embedded wallets.
         smartWallets: {
-          enabled: true,
-          createOnLogin: "all-users",
-          // Explicit type to avoid Coinbase Smart Wallet (doesn't support Robinhood Chain)
-          smartWalletType: "kernel",
+          enabled: false,
+          createOnLogin: "off",
         },
         defaultChain: robinhoodChain,
         supportedChains: [robinhoodChain],
