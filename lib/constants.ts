@@ -94,6 +94,13 @@ export const SLIPPAGE_BPS = 100
 export const HOODBUMP_TREASURY_ADDRESS =
   "0x43d9a5cb3c0299e3de882e10036ee9de0497f234" as const
 
+// 4B: HOODBUMP token + access gate
+// Users must hold at least this many $HOODBUMP tokens to use the bot.
+// Anti-bot + value alignment: bot activity should benefit $HOODBUMP holders.
+export const HOODBUMP_TOKEN_ADDRESS =
+  "0x43d9a5cb3c0299e3de882e10036ee9de0497f234" as const // TODO: replace with actual $HOODBUMP token address when deployed
+export const MIN_HOODBUMP_HOLD = 10_000_000n * 10n ** 18n // 10M tokens (18 decimals)
+
 // 5A: Anti-detection (basic: variable ±30% + 8% skip)
 export const ANTI_DETECTION_CONFIG = {
   intervalJitterPercent: 30,  // ±30% interval variance

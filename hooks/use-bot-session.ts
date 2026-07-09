@@ -48,7 +48,9 @@ export function useBotSession(userAddress: string | null) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || "Failed to start session")
+        // Prefer the more descriptive `message` field from hold-gate responses
+        const msg = err.message || err.error || "Failed to start session"
+        throw new Error(msg)
       }
       return res.json()
     },

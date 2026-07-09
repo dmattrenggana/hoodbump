@@ -3,6 +3,7 @@ import { isAddress, getAddress } from "viem"
 import { createSupabaseServiceClient } from "@/lib/supabase"
 import { getEthPriceUsd, usdToWei } from "@/lib/eth-price"
 import { getBotWallets } from "@/lib/bot-wallet"
+import { checkHoodbumpHold } from "@/lib/hold-gate"
 import {
   ANTI_DETECTION_CONFIG,
   MIN_INTERVAL_SECONDS,
@@ -49,6 +50,26 @@ export async function POST(request: NextRequest) {
 
     const normalizedUser = userAddress.toLowerCase()
     const checksummedToken = getAddress(tokenAddress) // validate + checksum
+
+    // ============================================
+    // Access gate — user must hold ≥10M $HOODBUMP
+    // ============================================
+    const holdCheck = await checkHoodbumpHold(userAddress as `0x${string}`)
+    if (!holdCheck.eligible) {
+      return NextResponse.json(
+        {
+          error: `Insufficient $${holdCheck.symbol || "HOODBUMP"} hold`,
+          message: `You need to hold at least ${holdCheck.formatted?.required} $${holdCheck.symbol || "HOODBUMP"} to use HoodBump.`,
+          details: {
+            yourBalance: holdCheck.formatted?.balance,
+            required: holdCheck.formatted?.required,
+            shortfall: holdCheck.formatted?.shortfall,
+            tokenAddress: "0x43d9a5cb3c0299e3de882e10036ee9de0497f234",
+          },
+        },
+        { status: 403 }
+      )
+    }
 
     // Validate amount
     const amountValue = parseFloat(amountUsd)

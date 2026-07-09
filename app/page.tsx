@@ -14,6 +14,7 @@ import { ActionButton } from "@/components/action-button"
 import { BotLiveActivity } from "@/components/bot-live-activity"
 import { ManageBot } from "@/components/manage-bot"
 import { WalletTokensPanel } from "@/components/wallet-tokens-panel"
+import { HoldGateBanner } from "@/components/hold-gate-banner"
 import { useUserBalances, useWethBalance } from "@/hooks/use-token-balance"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 import { useBotSession } from "@/hooks/use-bot-session"
@@ -208,6 +209,8 @@ export default function HoodBumpDashboard() {
               buyAmountUsd={buyAmountUsd}
               balanceWei={eth?.value?.toString()}
             />
+
+            {connectedAddress && <HoldGateBanner userAddress={connectedAddress} />}
 
             <BotLiveActivity userAddress={connectedAddress} />
 
