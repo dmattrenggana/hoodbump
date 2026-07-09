@@ -3,6 +3,12 @@ const require = createRequire(import.meta.url)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next.js 16 uses Turbopack by default. Empty turbopack config disables
+  // the legacy webpack-only build path warnings. We still keep the
+  // webpack config below for the Coinbase SDK alias since the stub
+  // is critical for Privy initialization.
+  turbopack: {},
+
   transpilePackages: [
     'viem',
     'wagmi',
@@ -11,11 +17,11 @@ const nextConfig = {
     '@wagmi/core',
     '@wagmi/connectors',
   ],
-  
+
   typescript: {
     ignoreBuildErrors: true,
   },
-  
+
   images: {
     unoptimized: true,
   },
@@ -49,4 +55,4 @@ const nextConfig = {
 }
 
 export default nextConfig
-// Last rebuilt: 2026-07-09T18:36Z
+// Last rebuilt: 2026-07-10T00:50Z
