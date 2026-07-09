@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from "viem"
-// Note: actual import below
+import { NextRequest, NextResponse } from "next/server"
 import { isAddress } from "viem"
 import { getZeroXQuote, formatZeroXError } from "@/lib/swap"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
