@@ -45,8 +45,15 @@ export default function HoodBumpDashboard() {
 
   // Sync connected wallet address from any Privy wallet or wagmi
   useEffect(() => {
-    // Pick the first wallet we can find
-    const privyWallet = wallets.find((w) => w.address)?.address
+    // Priority: SMART wallet (Kernel) > Embedded EOA > External (wagmi)
+    // CRITICAL: include smart_wallet — user uses Privy Kernel smart wallet
+    const smartWallet = wallets.find(
+      (w) => w.address && w.walletClientType === "smart_wallet"
+    )?.address
+    const embedded = wallets.find(
+      (w) => w.address && w.walletClientType === "embedded"
+    )?.address
+    const privyWallet = smartWallet || embedded
     const external = address
     const final = privyWallet || external || null
     setConnectedAddress(final)
