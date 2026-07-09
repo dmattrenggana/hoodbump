@@ -102,70 +102,33 @@ async function processUserCycle(state: {
       return { shouldContinue: false }
     }
 
-    // 4. Pick wallet via round-robin
-    const walletIndex = session.wallet_rotation_index % WALLETS_PER_USER
-    const currentWallet = botWallets[walletIndex]
-    console.log(`\n🔄 [${userAddress}] Wallet #${walletIndex + 1}: ${currentWallet.address}`)
-
-    // 5. Calculate amount with anti-detection variance
+    // 4. Calculate amount with anti-detection variance
     const ethPriceUsd = await getEthPriceUsd()
     const baseAmountWei = usdToWei(parseFloat(session.amount_usd), ethPriceUsd)
     const amountWei = getVariableAmount(baseAmountWei)
     console.log(`   Amount: ${(Number(amountWei) / 1e18).toFixed(6)} ETH ($${session.amount_usd})`)
 
-    // 6. Check wallet has enough WETH
-    const publicClient = getPublicClient()
-    const wethBalance = (await publicClient.readContract({
-      address: RH_WETH_ADDRESS,
-      abi: [
-        {
-          inputs: [{ name: "account", type: "address" }],
-          name: "balanceOf",
-          outputs: [{ name: "", type: "uint256" }],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      functionName: "balanceOf",
-      args: [currentWallet.address as `0x${string}`],
-    })) as bigint
-
-    if (wethBalance < amountWei) {
-      console.log(`   ⚠️ Insufficient WETH (${(Number(wethBalance) / 1e18).toFixed(4)} < ${(Number(amountWei) / 1e18).toFixed(4)})`)
-
-      // Check if ALL wallets are out — use on-chain balances (not stale DB)
-      const allWalletsBalances = await Promise.all(
-        botWallets.map((w) =>
-          publicClient
-            .readContract({
-              address: RH_WETH_ADDRESS,
-              abi: [
-                {
-                  inputs: [{ name: "account", type: "address" }],
-                  name: "balanceOf",
-                  outputs: [{ name: "", type: "uint256" }],
-                  stateMutability: "view",
-                  type: "function",
-                },
-              ],
-              functionName: "balanceOf",
-              args: [w.address as `0x${string}`],
-            })
-            .then((bal) => ({ addr: w.address, bal: bal as bigint }))
-            .catch(() => ({ addr: w.address, bal: 0n }))
-        )
-      )
-      const allEmpty = allWalletsBalances.every((b) => b.bal < baseAmountWei)
-      if (allEmpty) {
-        console.log(`   🛑 All bot wallets depleted`)
-        await deactivateSession(userAddress, "All bot wallets depleted")
-        return { shouldContinue: false }
-      }
-      // Rotate to next wallet
-      const nextIndex = (walletIndex + 1) % WALLETS_PER_USER
-      await updateSessionRotation(session.id, nextIndex)
-      return { shouldContinue: true }
+    // 5. Find next wallet with sufficient balance (skip empty wallets)
+    // This prevents the worker from getting stuck on one wallet when only
+    // one has funds — picks the first wallet with WETH >= amountWei.
+    const { findNextWalletWithBalance } = await import("../lib/wallet-selector")
+    const walletResult = await findNextWalletWithBalance(
+      botWallets.map((w, i) => ({ index: i, address: w.address as `0x${string}` })),
+      session.wallet_rotation_index % WALLETS_PER_USER,
+      amountWei,
+      process.env.NEXT_PUBLIC_HOODBUMP_RPC_URL!
+    )
+    if (!walletResult) {
+      console.log(`   🛑 All bot wallets depleted (no wallet has ${(Number(amountWei) / 1e18).toFixed(6)} WETH)`)
+      await deactivateSession(userAddress, "All bot wallets depleted")
+      return { shouldContinue: false }
     }
+    const walletIndex = walletResult.index
+    const currentWallet = botWallets[walletIndex]
+    const wethBalance = walletResult.balance
+    console.log(`\n🔄 [${userAddress}] Wallet #${walletIndex + 1}: ${currentWallet.address} (WETH: ${(Number(wethBalance) / 1e18).toFixed(6)})`)
+
+    const publicClient = getPublicClient()
 
     // 7. Get 0x quote
     let quote
@@ -300,6 +263,11 @@ async function processUserCycle(state: {
     // 11. On-chain is source of truth — skip DB balance update.
     // Bot log records the tx hash + amount; balances read live from chain.
 
+    // Look up buy token name for friendly log message (with cache)
+    const { getTokenMetadata } = await import("../lib/token-name")
+    const buyTokenMeta = await getTokenMetadata(session.token_address as `0x${string}`)
+    const buyTokenSymbol = buyTokenMeta.symbol
+
     await logBotEvent({
       user_address: userAddress,
       session_id: session.id,
@@ -309,7 +277,7 @@ async function processUserCycle(state: {
       tx_hash: swapHash,
       amount_wei: amountWei.toString(),
       token_address: session.token_address,
-      message: `[Worker] Swapped ${(Number(amountWei) / 1e18).toFixed(6)} WETH for ${session.token_address.slice(0, 10)}...`,
+      message: `[Worker] Swapped ${(Number(amountWei) / 1e18).toFixed(6)} WETH → ${buyTokenSymbol} (wallet #${walletIndex + 1}: ${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)})`,
     })
 
     // 12. Rotate wallet
