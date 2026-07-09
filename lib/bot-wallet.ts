@@ -1,6 +1,4 @@
 import {
-  generatePrivateKey,
-  privateKeyToAccount,
   createWalletClient,
   createPublicClient,
   http,
@@ -8,6 +6,7 @@ import {
   type Hex,
   type WalletClient,
 } from "viem"
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 import { createSupabaseServiceClient } from "./supabase"
 import { encryptPrivateKey, decryptPrivateKey } from "./bot-wallet-encryption"
 import { robinhoodChain } from "./chain-config"
