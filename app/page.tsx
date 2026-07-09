@@ -13,6 +13,7 @@ import { ConfigPanel } from "@/components/config-panel"
 import { ActionButton } from "@/components/action-button"
 import { BotLiveActivity } from "@/components/bot-live-activity"
 import { ManageBot } from "@/components/manage-bot"
+import { DebugWalletState } from "@/components/debug-wallet-state"
 import { useUserBalances } from "@/hooks/use-token-balance"
 import { useBotSession } from "@/hooks/use-bot-session"
 import { useEthPrice } from "@/hooks/use-eth-price"
@@ -217,6 +218,9 @@ export default function HoodBumpDashboard() {
           </TabsContent>
         </Tabs>
       )}
+
+      {/* TEMPORARY DEBUG - shows wallet state to diagnose re-login bug */}
+      {authenticated && <DebugWalletState />}
     </main>
   )
 }
