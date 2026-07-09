@@ -106,7 +106,7 @@ export const MIN_SWAP_USD = 0.01  // Test-friendly minimum (was 0.10)
 
 // Default swap interval (60s)
 export const DEFAULT_INTERVAL_SECONDS = 60
-export const MIN_INTERVAL_SECONDS = 10  // 10s minimum (anti-bot)
+export const MIN_INTERVAL_SECONDS = 5   // 5s minimum (single swap per cycle)
 export const MAX_INTERVAL_SECONDS = 600 // 10 minutes maximum
 
 // Bot wallet config

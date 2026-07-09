@@ -48,7 +48,7 @@ export function ConfigPanel({
               className="font-mono text-sm"
             />
             <div className="flex gap-1">
-              {["0.01", "0.05", "0.10", "0.50"].map((amt) => (
+              {["0.1", "0.5", "1", "3"].map((amt) => (
                 <button
                   key={amt}
                   onClick={() => onChangeAmount(amt)}
@@ -79,7 +79,7 @@ export function ConfigPanel({
             </span>
           </div>
           <Slider
-            min={10}
+            min={5}
             max={300}
             step={5}
             value={[intervalSeconds]}
@@ -87,7 +87,7 @@ export function ConfigPanel({
             className="py-2"
           />
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>10s</span>
+            <span>5s</span>
             <span>5m</span>
           </div>
         </div>

@@ -256,10 +256,9 @@ function FundingPanel({
             </div>
           </div>
 
-          {parseFloat(wethAmount) <= 0 && (
+          {parseFloat(ethAmount) <= 0 && (
             <div className="text-xs text-amber-500 mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded">
-              ⚠️ Bot wallets need WETH to swap. Set WETH amount &gt; 0 and ensure your
-              smart wallet has WETH (wrap ETH on Uniswap V4 first).
+              ⚠️ Set ETH amount &gt; 0. Each bot wallet needs native ETH for gas + swap input.
             </div>
           )}
 
