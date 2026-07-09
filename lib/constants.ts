@@ -102,7 +102,7 @@ export const ANTI_DETECTION_CONFIG = {
 } as const
 
 // 6B: Minimum swap amount ($0.10 USD)
-export const MIN_SWAP_USD = 0.10
+export const MIN_SWAP_USD = 0.01  // Test-friendly minimum (was 0.10)
 
 // Default swap interval (60s)
 export const DEFAULT_INTERVAL_SECONDS = 60
