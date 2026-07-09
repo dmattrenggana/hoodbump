@@ -92,7 +92,7 @@ export default function HoodBumpDashboard() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="HoodBump"
               width={48}
               height={48}

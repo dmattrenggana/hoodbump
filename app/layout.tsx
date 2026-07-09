@@ -18,9 +18,10 @@ export const metadata: Metadata = {
   generator: "HoodBump",
   icons: {
     icon: [
-      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/logo.png", type: "image/png", sizes: "any" },
     ],
-    apple: "/logo.svg",
+    apple: "/logo.png",
   },
 }
 
