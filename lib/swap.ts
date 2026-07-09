@@ -180,6 +180,121 @@ export function buildSwapFromQuote(quote: ZeroXQuote): {
 }
 
 /**
+ * High-level NATIVE ETH swap execution.
+ *
+ * No WETH wrap needed — 0x v2 supports native ETH via the Settler contract.
+ * No approve step. Just send ETH value + call data to Settler.
+ *
+ * Use this when bot wallet has ETH directly (not WETH).
+ */
+export async function executeEthSwap(params: {
+  userAddress: string
+  walletIndex: number
+  buyToken: Address
+  sellAmount: bigint // in wei
+}): Promise<{
+  success: boolean
+  swapHash?: import("viem").Hex
+  buyAmount?: bigint
+  error?: string
+  steps: Array<{ step: string; status: "ok" | "fail" | "info"; detail?: string }>
+}> {
+  const { userAddress, walletIndex, buyToken, sellAmount } = params
+  const steps: Array<{ step: string; status: "ok" | "fail" | "info"; detail?: string }> = []
+
+  try {
+    const { signAndSendTransaction, getBotWalletByIndex, getPublicClient } = await import("./bot-wallet")
+
+    steps.push({ step: "load_wallet", status: "info", detail: `Fetching wallet ${walletIndex}` })
+    const wallet = await getBotWalletByIndex(userAddress, walletIndex)
+    if (!wallet) {
+      return { success: false, error: `Bot wallet ${walletIndex} not found`, steps }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Wallet ${wallet.address}`
+
+    const publicClient = getPublicClient()
+
+    // Check ETH balance
+    steps.push({ step: "check_balance", status: "info", detail: `Reading ETH balance` })
+    const ethBalance = await publicClient.getBalance({ address: wallet.address as `0x${string}` })
+    if (ethBalance < sellAmount) {
+      steps[steps.length - 1].status = "fail"
+      steps[steps.length - 1].detail = `Insufficient ETH: ${(Number(ethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`
+      return {
+        success: false,
+        error: `Insufficient ETH in wallet ${walletIndex}: ${(Number(ethBalance) / 1e18).toFixed(6)} < ${(Number(sellAmount) / 1e18).toFixed(6)}`,
+        steps,
+      }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `ETH: ${(Number(ethBalance) / 1e18).toFixed(6)}`
+
+    // Get quote (0x v2 handles native ETH when sellToken=ETH)
+    steps.push({ step: "get_quote", status: "info", detail: `Calling 0x v2 quote (native ETH → buy token)` })
+    const quote = await getZeroXQuote({
+      sellToken: "ETH" as any, // 0x v2 accepts "ETH" string for native
+      buyToken,
+      sellAmount,
+      takerAddress: wallet.address as `0x${string}`,
+    })
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `buyAmount=${(Number(quote.buyAmount) / 1e18).toFixed(6)} gas=${quote.gas}`
+    if (quote.issues?.simulationIncomplete) {
+      steps.push({ step: "simulation_warning", status: "info", detail: `0x simulation incomplete` })
+    }
+
+    // Execute swap (no approve needed for ETH)
+    const txParams = buildSwapFromQuote(quote)
+    const swapGas = (txParams.gasLimit * 120n) / 100n
+    steps.push({ step: "swap", status: "info", detail: `Sending ETH swap tx (gas=${swapGas}, value=${txParams.value})` })
+    const swapHash = await signAndSendTransaction(userAddress, walletIndex, {
+      to: txParams.to,
+      data: txParams.data,
+      value: txParams.value, // ETH value
+      gas: swapGas,
+    })
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Tx: ${swapHash}`
+
+    // Wait for confirmation
+    steps.push({ step: "confirm", status: "info", detail: `Waiting for confirmation` })
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: swapHash,
+      confirmations: 1,
+    })
+    if (receipt.status !== "success") {
+      steps[steps.length - 1].status = "fail"
+      steps[steps.length - 1].detail = `Swap reverted at block ${receipt.blockNumber}`
+      return {
+        success: false,
+        swapHash,
+        error: `Swap reverted at block ${receipt.blockNumber} (gas used: ${receipt.gasUsed})`,
+        steps,
+      }
+    }
+    steps[steps.length - 1].status = "ok"
+    steps[steps.length - 1].detail = `Block ${receipt.blockNumber}, gas used ${receipt.gasUsed}`
+
+    return {
+      success: true,
+      swapHash,
+      buyAmount: BigInt(quote.buyAmount),
+      steps,
+    }
+  } catch (error: any) {
+    const lastStep = steps[steps.length - 1]
+    if (lastStep && lastStep.status === "info") {
+      lastStep.status = "fail"
+      lastStep.detail = error.message?.slice(0, 200) || "Unknown error"
+    } else {
+      steps.push({ step: "unknown_error", status: "fail", detail: error.message?.slice(0, 200) })
+    }
+    return { success: false, error: error.message || "Unknown error", steps }
+  }
+}
+
+/**
  * Format 0x API error for user display.
  */
 export function formatZeroXError(error: any): string {
@@ -204,6 +319,16 @@ export function formatZeroXError(error: any): string {
 
 /**
  * High-level swap execution for a bot wallet.
+ *
+ * Handles the full flow:
+ *   1. Check WETH balance
+ *   2. Get 0x v2 quote (AllowanceHolder)
+ *   3. Approve WETH → AllowanceHolder if needed (MAX_UINT256, one-time per wallet)
+ *   4. Send swap tx with 20% gas buffer
+ *   5. Wait for confirmation
+ *
+ * Returns structured result for API endpoints + workers.
+ */
  *
  * Handles the full flow:
  *   1. Check WETH balance
