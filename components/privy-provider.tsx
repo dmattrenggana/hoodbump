@@ -43,7 +43,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
         appearance: {
           theme: "dark",
           accentColor: "#00ff00", // HoodBump neon green
-          logo: "/icon.png",
+          logo: "/icon.svg",
         },
         embeddedWallets: {
           ethereum: {

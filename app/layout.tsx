@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "HoodBump - Trending Bot for Robinhood Chain",
   description: "Automated trending bot for Robinhood Chain tokens",
   icons: {
-    icon: "/icon.png",
+    icon: "/icon.svg",
   },
 }
 
