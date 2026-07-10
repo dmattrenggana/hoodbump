@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Copy, Check, RefreshCw, ExternalLink, LogOut } from "lucide-react"
+import { Copy, Check, RefreshCw, ExternalLink, LogOut, Send } from "lucide-react"
 import { toast } from "sonner"
 import { formatAddress } from "@/lib/format"
 
@@ -15,6 +15,7 @@ interface WalletCardProps {
   isRefreshing?: boolean
   onRefresh?: () => void
   onDisconnect?: () => void
+  onSend?: () => void
 }
 
 export function WalletCard({
@@ -25,6 +26,7 @@ export function WalletCard({
   isRefreshing = false,
   onRefresh,
   onDisconnect,
+  onSend,
 }: WalletCardProps) {
   const [copied, setCopied] = useState(false)
 
@@ -68,6 +70,17 @@ export function WalletCard({
                 className="h-7 w-7 p-0"
               >
                 <LogOut className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onSend && smartWalletAddress && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onSend}
+                className="h-7 w-7 p-0"
+                title="Send ETH or tokens"
+              >
+                <Send className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>

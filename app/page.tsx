@@ -15,6 +15,7 @@ import { BotLiveActivity } from "@/components/bot-live-activity"
 import { ManageBot } from "@/components/manage-bot"
 import { WalletTokensPanel } from "@/components/wallet-tokens-panel"
 import { HoldGateBanner } from "@/components/hold-gate-banner"
+import { SendModal } from "@/components/send-modal"
 import { useUserBalances, useWethBalance } from "@/hooks/use-token-balance"
 import { RH_WETH_ADDRESS } from "@/lib/constants"
 import { useBotSession } from "@/hooks/use-bot-session"
@@ -35,6 +36,7 @@ export default function HoodBumpDashboard() {
   const [intervalSeconds, setIntervalSeconds] = useState(60)
   const [isMounted, setIsMounted] = useState(false)
   const [activeTab, setActiveTab] = useState("control")
+  const [showSendModal, setShowSendModal] = useState(false)
 
   const { eth, refetch: refetchEth } = useUserBalances(connectedAddress)
   const { weth, refetch: refetchWeth } = useWethBalance(connectedAddress, RH_WETH_ADDRESS)
@@ -180,6 +182,7 @@ export default function HoodBumpDashboard() {
               ethPriceUsd={ethPrice}
               onRefresh={refetchBalances}
               onDisconnect={logout}
+              onSend={() => setShowSendModal(true)}
             />
 
             <TokenInput
@@ -219,6 +222,14 @@ export default function HoodBumpDashboard() {
               <p className="mt-1">Built for Robinhood Chain (chain ID 4663)</p>
             </div>
           </TabsContent>
+
+          {showSendModal && connectedAddress && (
+            <SendModal
+              smartWalletAddress={connectedAddress}
+              onClose={() => setShowSendModal(false)}
+              onSuccess={refetchBalances}
+            />
+          )}
 
           {/* MANAGE BOT TAB */}
           <TabsContent value="manage" className="space-y-4">
