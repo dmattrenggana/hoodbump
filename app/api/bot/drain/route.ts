@@ -45,6 +45,7 @@ interface DrainResult {
     txHash?: string
     amount: string
     status: "success" | "error" | "skipped"
+    error?: string
   }>
   status: "success" | "partial" | "error"
 }
@@ -84,15 +85,19 @@ export async function POST(request: NextRequest) {
         const ethBalance = await publicClient.getBalance({
           address: wallet.address as `0x${string}`,
         })
+        console.log(`[Drain] Wallet ${i} (${wallet.address}): balance=${formatEther(ethBalance)} ETH`)
         // Leave tiny dust for future gas (1 wei is fine, but use 1000 to be safe)
         const transferAmount = ethBalance - 1000n
         if (transferAmount > 0n) {
-          console.log(`[Drain] Wallet ${i} (${wallet.address}): ${formatEther(transferAmount)} ETH`)
+          console.log(`[Drain] Wallet ${i}: sending ${formatEther(transferAmount)} ETH → ${recipient}`)
           const hash = await signAndSendTransaction(userAddress, wallet.wallet_index, {
             to: recipient,
             value: transferAmount,
-            gas: 21000n,
+            // 30k gas handles EOA → smart contract recipients (receive
+            // function may consume extra gas). 21k is minimum for EOA → EOA.
+            gas: 30000n,
           })
+          console.log(`[Drain] Wallet ${i}: tx=${hash}`)
           await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 })
           result.eth = {
             txHash: hash,
@@ -103,11 +108,13 @@ export async function POST(request: NextRequest) {
           result.eth = { amount: "0", status: "skipped" }
         }
       } catch (err: any) {
-        console.error(`[Drain] Wallet ${i} ETH failed:`, err.message)
+        const errMsg = err?.shortMessage || err?.message || JSON.stringify(err).slice(0, 200)
+        console.error(`[Drain] Wallet ${i} ETH failed:`, errMsg)
         result.eth = {
           amount: "0",
           status: "error",
-        }
+          error: errMsg,
+        } as any
         result.status = "partial"
       }
 
@@ -164,12 +171,14 @@ export async function POST(request: NextRequest) {
             status: "success",
           })
         } catch (err: any) {
+          console.error(`[Drain] Wallet ${i} ${tokenAddr} failed:`, err.message)
           result.tokens.push({
             symbol: "?",
             address: tokenAddr,
             amount: "0",
             status: "error",
-          })
+            error: err.message?.slice(0, 200),
+          } as any)
           if (result.status === "success") result.status = "partial"
         }
       }
