@@ -6,11 +6,12 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Loader2, RefreshCw, Wallet, Send, X, ExternalLink, CheckCircle2, AlertCircle, Zap } from "lucide-react"
+import { Plus, Loader2, RefreshCw, Wallet, Send, X, ExternalLink, CheckCircle2, AlertCircle, Zap, Download } from "lucide-react"
 import { toast } from "sonner"
 import { formatAddress, formatEth } from "@/lib/format"
 import { WALLETS_PER_USER } from "@/lib/constants"
 import { useFundBotWallets } from "@/hooks/use-fund-bot-wallets"
+import { DrainModal } from "@/components/drain-modal"
 
 interface BotWallet {
   id: string
@@ -81,15 +82,27 @@ export function ManageBot({ userAddress }: ManageBotProps) {
               <span className="text-xs text-muted-foreground">BOT WALLETS</span>
             </div>
             {hasWallets && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => refetch()}
-                className="h-7 text-xs"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Refresh
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetch()}
+                  className="h-7 text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Refresh
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDrainModal(true)}
+                  className="h-7 text-xs text-destructive hover:text-destructive"
+                  title="Drain all ETH + tokens to your smart wallet"
+                >
+                  <Download className="h-3 w-3 mr-1" />
+                  Drain
+                </Button>
+              </div>
             )}
           </div>
 
@@ -183,6 +196,7 @@ function FundingPanel({
   const [walletCount, setWalletCount] = useState(1)
   const [ethAmount, setEthAmount] = useState("0.001")
   const [showProgress, setShowProgress] = useState(false)
+  const [showDrainModal, setShowDrainModal] = useState(false)
 
   const { fund, reset, isRunning, results, error } =
     useFundBotWallets(smartWalletAddress, botWallets, {
@@ -300,6 +314,14 @@ function FundingPanel({
           error={error}
           walletCount={walletCount}
           onClose={handleClose}
+        />
+      )}
+
+      {showDrainModal && (
+        <DrainModal
+          smartWalletAddress={userAddress}
+          botWalletCount={wallets?.length || 0}
+          onClose={() => setShowDrainModal(false)}
         />
       )}
     </>
