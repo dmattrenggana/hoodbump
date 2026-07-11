@@ -85,30 +85,33 @@ export function ManageBot({ userAddress }: ManageBotProps) {
               <div className="flex gap-1">
                 <Button
                   type="button"
+                  data-testid="refresh-button"
                   variant="ghost"
                   size="sm"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log("[ManageBot] Refresh clicked")
+                    console.log("[ManageBot] Refresh clicked", new Date().toISOString())
                     refetch()
                   }}
-                  className="h-7 text-xs"
+                  className="h-7 text-xs cursor-pointer"
                 >
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Refresh
                 </Button>
                 <Button
                   type="button"
+                  data-testid="drain-button"
                   variant="ghost"
                   size="sm"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log("[ManageBot] Drain clicked")
+                    console.log("[ManageBot] Drain clicked", new Date().toISOString())
+                    window.alert("Drain clicked!") // Temporary visual feedback
                     setShowDrainModal(true)
                   }}
-                  className="h-7 text-xs text-destructive hover:text-destructive"
+                  className="h-7 text-xs text-destructive hover:text-destructive cursor-pointer"
                   title="Drain all ETH + tokens to your smart wallet"
                 >
                   <Download className="h-3 w-3 mr-1" />
