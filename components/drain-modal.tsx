@@ -24,7 +24,7 @@ export function DrainModal({ smartWalletAddress, botWalletCount, onClose }: Drai
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
       <Card className="bg-card border-border w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export function DrainModal({ smartWalletAddress, botWalletCount, onClose }: Drai
                 <input
                   type="text"
                   value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
+                  onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                   placeholder="DRAIN"
                   className="w-full h-9 px-3 bg-background border border-border rounded text-sm font-mono"
                 />
