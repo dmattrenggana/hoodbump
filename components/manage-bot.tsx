@@ -85,13 +85,11 @@ export function ManageBot({ userAddress }: ManageBotProps) {
               <div className="flex gap-1">
                 <Button
                   type="button"
-                  data-testid="refresh-button"
                   variant="ghost"
                   size="sm"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log("[ManageBot] Refresh clicked", new Date().toISOString())
                     refetch()
                   }}
                   className="h-7 text-xs cursor-pointer"
@@ -101,14 +99,11 @@ export function ManageBot({ userAddress }: ManageBotProps) {
                 </Button>
                 <Button
                   type="button"
-                  data-testid="drain-button"
                   variant="ghost"
                   size="sm"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log("[ManageBot] Drain clicked", new Date().toISOString())
-                    window.alert("Drain clicked!") // Temporary visual feedback
                     setShowDrainModal(true)
                   }}
                   className="h-7 text-xs text-destructive hover:text-destructive cursor-pointer"
