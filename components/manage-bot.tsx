@@ -99,14 +99,15 @@ export function ManageBot({ userAddress }: ManageBotProps) {
                 </Button>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="default"
                   size="sm"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
+                    console.log("[Drain] Opening modal")
                     setShowDrainModal(true)
                   }}
-                  className="h-7 text-xs text-destructive hover:text-destructive cursor-pointer"
+                  className="h-7 text-xs bg-destructive hover:bg-destructive/90 text-white font-semibold cursor-pointer"
                   title="Drain all ETH + tokens to your smart wallet"
                 >
                   <Download className="h-3 w-3 mr-1" />
@@ -173,6 +174,24 @@ export function ManageBot({ userAddress }: ManageBotProps) {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Prominent Drain button below wallet list */}
+          {hasWallets && (
+            <Button
+              type="button"
+              variant="default"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log("[Drain] Opening modal (prominent)")
+                setShowDrainModal(true)
+              }}
+              className="w-full mt-4 h-12 bg-destructive hover:bg-destructive/90 text-white font-bold text-sm cursor-pointer"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Drain All Wallets → Smart Wallet
+            </Button>
           )}
         </div>
       </Card>
